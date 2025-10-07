@@ -1,13 +1,17 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-primary: #36180c;
+  --color-primary: #8a2be2;
   --color-secondary: #6c3a13;
-  --color-fuente: #fef7da;
+  --color-fuente: #3c3c3c;
   --color-focus: #455442;
-  --color-background: #3c3c3c;
+  --color-background: #fcfcfc;
+  --font-logo: 'Luckiest Guy', system-ui;
+  --font-body: 'Poppins', sans-serif;
 }
 
 body {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
+  color: var(--color-fuente);
+  background-color: var(--color-background);
 }
