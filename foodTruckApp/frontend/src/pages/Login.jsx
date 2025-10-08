@@ -1,13 +1,19 @@
-import { Logo } from '../components/login/Logo';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Logo } from '../components/login/Logo';
 
 export const Login = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleLogin = (e) => {
     e.preventDefault();
-    console.log('Intentando iniciar sesión con:', { email, password });
+    if (email === 'admin@example.com') {
+      navigate('/admin');
+    } else {
+      navigate('/vendedor');
+    }
   };
 
   return (
@@ -23,7 +29,7 @@ export const Login = () => {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-4">
             <input
               type="email"
               name="email"
