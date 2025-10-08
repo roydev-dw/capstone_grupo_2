@@ -9,7 +9,7 @@ export const Login = () => {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (email === 'admin@example.com') {
+    if (email === 'ado.pezzini@gmail.com' && password === 'admin123') {
       navigate('/admin');
     } else {
       navigate('/vendedor');
@@ -18,8 +18,8 @@ export const Login = () => {
 
   return (
     <>
-      <div className="min-h-screen flex flex-col items-center justify-center p-2">
-        <div className="w-full max-w-sm">
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <div className="w-full max-w-sm md:max-w-md lg:max-w-lg px-6">
           <div className="flex flex-col items-center mb-8">
             <div>
               <Logo />
@@ -29,7 +29,10 @@ export const Login = () => {
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form
+            onSubmit={handleLogin}
+            className="space-y-4 bg-white px-8 py-12 rounded-xl shadow-xl"
+          >
             <input
               type="email"
               name="email"
@@ -37,7 +40,7 @@ export const Login = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-4 py-3 border bg-background border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             />
 
             <input
@@ -47,10 +50,15 @@ export const Login = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-4 py-3 border bg-background border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             />
-
-            <div className="flex justify-end pt-1 pb-4">
+            <button
+              type="submit"
+              className="w-full mt-10 py-3 rounded-lg text-white bg-primary font-bold shadow-lg transition-all duration-300 ease-in-out hover:bg-primary/90 hover:transform hover:scale-102"
+            >
+              Iniciar Sesión
+            </button>
+            <div className="flex justify-center pt-2">
               <a
                 href="#"
                 className="text-sm font-medium hover:underline text-primary"
@@ -58,13 +66,6 @@ export const Login = () => {
                 ¿Olvidaste tu contraseña?
               </a>
             </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 rounded-lg text-white bg-primary font-semibold shadow-lg transition duration-150 ease-in-out hover:opacity-90"
-            >
-              Iniciar Sesión
-            </button>
           </form>
         </div>
       </div>
