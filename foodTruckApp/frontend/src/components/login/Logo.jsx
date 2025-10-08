@@ -1,6 +1,6 @@
 export const Logo = () => {
   return (
-    <div className="flex justify-center items-center w-full mb-8">
+    <div className="flex justify-center items-center w-full mb-2">
       <div className="relative flex flex-col items-center justify-center">
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -25,7 +25,6 @@ export const Logo = () => {
             }}
           />
         </svg>
-
         <div
           className="absolute text-white font-logo text-6xl"
           style={{
