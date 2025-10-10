@@ -1,7 +1,7 @@
-export const Logo = () => {
+export const Logo = ({ alineacion = 'justify-center' }) => {
   return (
-    <div className="flex justify-center items-center w-full mb-2">
-      <div className="relative flex flex-col items-center justify-center">
+    <div className={`flex ${alineacion} items-center w-full mb-2`}>
+      <div className="relative flex flex-col items-center ">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 200 100"

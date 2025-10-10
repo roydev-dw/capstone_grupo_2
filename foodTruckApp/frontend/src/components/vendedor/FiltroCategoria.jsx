@@ -6,7 +6,7 @@ export const FiltroCategoria = ({
   const [selected, setSelected] = useState(categories[0]);
 
   return (
-    <div className="mb-4 flex justify-between">
+    <div className="mb-4 flex justify-start gap-2  ">
       {categories.map((cat) => {
         const isActive = cat === selected;
         return (
@@ -14,9 +14,7 @@ export const FiltroCategoria = ({
             key={cat}
             onClick={() => setSelected(cat)}
             className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-              isActive
-                ? 'bg-primary text-white'
-                : 'bg-gray-200 dark:bg-gray-200'
+              isActive ? 'bg-primary text-white font-semibold' : 'bg-focus'
             }`}
           >
             {cat}
