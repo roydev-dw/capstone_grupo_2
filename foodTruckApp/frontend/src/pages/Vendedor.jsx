@@ -15,7 +15,7 @@ export const Vendedor = () => {
     const fetchProductos = async () => {
       try {
         setLoading(true);
-        const data = await api.get('/products/category/groceries');
+        const data = await api.get('products/category/groceries');
 
         const productosNormalizados = data.products.map((producto) => ({
           id: producto.id,
