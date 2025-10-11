@@ -14,6 +14,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Login } from './pages/Login';
 import { Vendedor } from './pages/Vendedor';
 import { Administrador } from './pages/Administrador';
+import { Supervisor } from './pages/Supervisor';
 
 import '@fontsource/luckiest-guy';
 import '@fontsource/poppins/400.css';
@@ -28,6 +29,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/" element={<Login />} />
         <Route path="/vendedor" element={<Vendedor />} />
         <Route path="/admin" element={<Administrador />} />
+        <Route path="/supervisor" element={<Supervisor />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
