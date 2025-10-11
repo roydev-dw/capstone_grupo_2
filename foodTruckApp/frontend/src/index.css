@@ -4,8 +4,8 @@
   --color-primary: #8a2be2;
   --color-secondary: #6c3a13;
   --color-fuente: #3c3c3c;
-  --color-focus: #455442;
-  --color-background: #ffffff;
+  --color-focus: oklch(90.2% 0.063 306.703);
+  --color-background: #f2f2f2;
   --font-logo: 'Luckiest Guy', system-ui;
   --font-body: 'Poppins', sans-serif;
 }
