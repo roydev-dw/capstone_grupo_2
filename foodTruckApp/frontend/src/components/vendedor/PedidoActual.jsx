@@ -24,10 +24,10 @@ export const PedidoActual = ({ cart = [], onClearCart }) => {
                   ${item.price.toFixed(2)}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 ">
                 <button className="text-lg font-bold text-gray-400">-</button>
                 <span className="font-bold text-lg">{item.quantity}</span>
-                <button className="text-lg font-bold text-purple-600">+</button>
+                <button className="text-lg font-bold text-purple-100">+</button>
               </div>
             </li>
           ))}
