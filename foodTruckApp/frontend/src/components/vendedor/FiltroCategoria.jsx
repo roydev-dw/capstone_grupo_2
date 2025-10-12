@@ -13,8 +13,8 @@ export const FiltroCategoria = ({
           <button
             key={cat}
             onClick={() => setSelected(cat)}
-            className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-              isActive ? 'bg-primary text-white font-semibold' : 'bg-focus'
+            className={`shrink-0 px-4 py-2 text-sm font-medium transition-colors ${
+              isActive ? 'bg-surface text-primario font-semibold' : 'bg-focus'
             }`}
           >
             {cat}

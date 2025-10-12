@@ -7,8 +7,7 @@ export const BarraBusqueda = () => {
       <input
         type="text"
         placeholder="Buscar productos"
-        className="w-full rounded-xl py-3 pl-12 pr-4 bg-white
-           placeholder:text-fuente/40 focus:outline-none focus:ring-1 focus:ring-primary shadow-[0_0_20px_1px_rgba(0,0,0,0.3)]"
+        className="w-full rounded-card py-3 pl-12 pr-4 bg-surface placeholder:text-fuente/40 focus:outline-none focus:ring-1 focus:ring-primary shadow-search"
       />
     </div>
   );
