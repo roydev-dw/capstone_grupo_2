@@ -4,7 +4,7 @@ import PropTypes from 'prop-types';
 export const BotonTarjeta = React.memo(function BotonTarjeta({
   cartCount = 0,
   onClick = () => {},
-  colorClass = 'bg-primary hover:bg-blue-700',
+  colorClass = 'bg-primary hover:bg-primary-hover',
 }) {
   const disabled = !cartCount;
 
@@ -18,7 +18,7 @@ export const BotonTarjeta = React.memo(function BotonTarjeta({
           cartCount === 1 ? 'artículo' : 'artículos'
         }`}
         className={[
-          'flex w-full items-center justify-center gap-3 rounded-xl py-4 text-lg font-bold text-white ',
+          'flex w-full items-center justify-center gap-3 rounded-card py-4 text-lg font-bold text-white ',
           colorClass,
           disabled ? 'opacity-60 pointer-events-none' : '',
         ].join(' ')}
@@ -42,7 +42,7 @@ export const BotonTarjeta = React.memo(function BotonTarjeta({
           Ver Pedido
           <span
             aria-hidden="true"
-            className="ml-2 inline-flex items-center justify-center rounded-full bg-white/20 px-2 py-0.5 text-sm font-bold"
+            className="ml-2 inline-flex items-center justify-center rounded-pill bg-overlay px-2 py-0.5 text-sm font-bold"
           >
             {cartCount}
           </span>

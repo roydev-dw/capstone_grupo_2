@@ -1,15 +1,18 @@
 export const TarjetaProducto = ({ product }) => {
   return (
-    <div className="group cursor-pointer ">
-      <div className="w-full relative mb-2 overflow-hidden bg-purple-200 rounded-xl">
-        <div
-          className=" bg-cover bg-center aspect-square"
-          style={{ backgroundImage: `url(${product.image})` }}
-        ></div>
-        <div className="absolute inset-0  opacity-0 transition-opacity group-hover:opacity-100"></div>
+    <div className="group cursor-pointer flex flex-col items-center">
+      <div className="w-full mb-2 overflow-hidden rounded-2xl p-2 shadow-lg transform transition-all duration-300 hover:scale-105 hover:shadow-lg bg-primario/5 border-2 border-primario">
+        <img
+          src={product.image}
+          alt={product.name}
+          className="w-full object-cover rounded-xl"
+          loading="lazy"
+        />
       </div>
-      <p className="text-sm">{product.name}</p>
-      <p className="text-sm">${product.price.toFixed(2)}</p>
+      <p className="text-md text-center font-semibold">{product.name}</p>
+      <p className="text-lg text-center text-placeholder font-bold">
+        ${product.price.toFixed(2)}
+      </p>
     </div>
   );
 };

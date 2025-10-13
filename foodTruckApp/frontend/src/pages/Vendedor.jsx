@@ -56,6 +56,7 @@ export const Vendedor = () => {
       const productoExistente = prevCarrito.find(
         (item) => item.id === productoId
       );
+      if (!productoExistente) return prevCarrito;
       if (productoExistente.quantity === 1) {
         return prevCarrito.filter((item) => item.id !== productoId);
       }
@@ -78,18 +79,18 @@ export const Vendedor = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="lg:grid lg:grid-cols-3 h-screen">
-        <div className="lg:col-span-2 flex flex-col h-screen overflow-y-auto">
+    <div className="min-h-screen bg-fondo">
+      <div className="lg:flex min-h-screen">
+        <div className="flex flex-col min-h-screen w-full lg:w-3/4 overflow-y-auto">
           <Header />
           <main className="flex-1 p-6 lg:p-12">
             <FiltroCategoria />
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-10 gap-4 mt-8 bg-white p-8 rounded-xl">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4 mt-8">
               {productos.map((p) => (
                 <div
                   key={p.id}
-                  onClick={() => handleAddCarrito(p)}
                   className="cursor-pointer"
+                  onClick={() => handleAddCarrito(p)}
                 >
                   <TarjetaProducto product={p} />
                 </div>
@@ -102,7 +103,7 @@ export const Vendedor = () => {
             />
           </div>
         </div>
-        <div className="hidden lg:block">
+        <div className="hidden lg:block lg:w-1/4">
           <PedidoActual
             cart={carrito}
             onClearCart={handleClearCarrito}

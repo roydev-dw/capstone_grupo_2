@@ -1,17 +1,23 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-primary: #8a2be2;
-  --color-secondary: #6c3a13;
-  --color-fuente: #3c3c3c;
-  --color-focus: oklch(90.2% 0.063 306.703);
-  --color-background: #f2f2f2;
+  /* --- Fuentes y Radios --- */
   --font-logo: 'Luckiest Guy', system-ui;
   --font-body: 'Poppins', sans-serif;
+
+  /* --- Colores Principales --- */
+  --color-fondo: #faf9f6; /* Blanco hueso (fondo base) */
+  --color-elemento: #ffffff; /* Blanco puro (tarjetas, contenedores) */
+  --color-primario: #c1904d; /* Caramelo cálido */
+  --color-secundario: #7b8c5b; /* Verde oliva complementario */
+
+  /* --- Colores Neutros --- */
+  --color-texto: #333333; /* Gris oscuro para texto */
+  --color-placeholder: #bcbcbc; /* Gris claro para inputs y detalles */
 }
 
 body {
   font-family: var(--font-body);
-  color: var(--color-fuente);
-  background-color: var(--color-background);
+  color: var(--color-texto);
+  background-color: var(--color-fondo);
 }
