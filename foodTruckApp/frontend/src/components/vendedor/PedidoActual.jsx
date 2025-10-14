@@ -3,14 +3,15 @@
  * @param {object} props
  * @param {Array} props.cart - Array de productos en el carrito.
  * @param {Function} props.onClearCart - Función para vaciar el carrito.
- * @param {Function} props.onAddToCart - Función para aumentar cantidad (recibe item).
- * @param {Function} props.onRemoveFromCart - Función para disminuir cantidad (recibe item.id).
+ * ✨ CAMBIO: Actualizamos los nombres de las props y sus descripciones.
+ * @param {Function} props.onAgregarAlCarrito - Función para aumentar cantidad (recibe el item completo).
+ * @param {Function} props.onRemoverDelCarrito - Función para disminuir cantidad (recibe el idItemCarrito).
  */
 export const PedidoActual = ({
   cart = [],
   onClearCart = () => {},
-  onAddToCart = () => {},
-  onRemoveFromCart = () => {},
+  onAgregarAlCarrito = () => {},
+  onRemoverDelCarrito = () => {},
 }) => {
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
@@ -44,13 +45,25 @@ export const PedidoActual = ({
           <ul className="flex-1 space-y-4 overflow-y-auto pr-2">
             {cart.map((item) => (
               <li
-                key={item.id}
+                key={item.idItemCarrito}
                 className="flex justify-between items-center gap-4"
                 aria-live="polite"
               >
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold truncate">{item.name}</p>
-                  <p className="text-sm text-placeholder">
+                  {item.selectedOptions && (
+                    <div className="pl-2">
+                      {Object.entries(item.selectedOptions).map(
+                        ([opcion, eleccion]) => (
+                          <p key={opcion} className="text-sm text-placeholder">
+                            - {opcion}: {eleccion}
+                          </p>
+                        )
+                      )}
+                    </div>
+                  )}
+
+                  <p className="text-md font-semibold text-texto/60">
                     {formatCurrency(item.price)}
                   </p>
                 </div>
@@ -58,7 +71,7 @@ export const PedidoActual = ({
                   <button
                     type="button"
                     aria-label={`Disminuir cantidad de ${item.name}`}
-                    onClick={() => onRemoveFromCart(item.id)}
+                    onClick={() => onRemoverDelCarrito(item.idItemCarrito)}
                     className="w-8 h-8 rounded-md flex items-center justify-center border-2 border-primario transition-all hover:bg-fondo disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={item.quantity <= 0}
                   >
@@ -72,8 +85,8 @@ export const PedidoActual = ({
                   <button
                     type="button"
                     aria-label={`Aumentar cantidad de ${item.name}`}
-                    onClick={() => onAddToCart(item)}
-                    className="w-8 h-8 rounded-md flex items-center justify-center bg-primario text-white shadow-sm transition-all hover:brightness-105"
+                    onClick={() => onAgregarAlCarrito(item)}
+                    className="w-8 h-8 rounded-md flex items-center justify-center bg-primario hover:bg-primario/80 text-fondo shadow-sm transition duration-300"
                   >
                     <span>+</span>
                   </button>
@@ -83,14 +96,11 @@ export const PedidoActual = ({
           </ul>
         )}
       </div>
-      <div className="mt-4 lg:mt-6 border-t border-border pt-4">
+      <div className="mt-4 lg:mt-6 border-t-2 border-primario pt-4">
         <div className="flex justify-between items-center mb-4">
           <span className="font-bold text-lg">Total</span>
-          <span className="font-bold text-lg text-primario">
-            {formatCurrency(total)}
-          </span>
+          <span className="font-bold text-lg">{formatCurrency(total)}</span>
         </div>
-
         <button
           type="button"
           onClick={() => {}}
@@ -103,11 +113,10 @@ export const PedidoActual = ({
         >
           Confirmar Venta
         </button>
-
         <button
           type="button"
           onClick={onClearCart}
-          className="w-full py-3 rounded-md font-semibold transition-colors hover:bg-fondo border border-border text-texto"
+          className="w-full py-3 rounded-md font-semibold bg-secundario hover:bg-secundario/80  border border-border text-fondo transition duration-300"
         >
           Cancelar
         </button>
