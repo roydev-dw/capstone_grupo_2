@@ -31,16 +31,19 @@ export const Vendedor = () => {
             p.options = [
               {
                 name: 'Café',
-                choices: ['Cafeinado', 'Descafeinado'],
+                choices: [
+                  { name: 'Cafeinado', extraPrice: 0 },
+                  { name: 'Descafeinado', extraPrice: 200 },
+                ],
               },
               {
                 name: 'Leche',
                 choices: [
-                  'Entera',
-                  'Descremada',
-                  'Semidescremada',
-                  'Sin Lactosa',
-                  'Vegetal',
+                  { name: 'Entera', extraPrice: 0 },
+                  { name: 'Descremada', extraPrice: 0 },
+                  { name: 'Semidescremada', extraPrice: 0 },
+                  { name: 'Sin Lactosa', extraPrice: 300 },
+                  { name: 'Vegetal', extraPrice: 500 },
                 ],
               },
             ];
@@ -63,7 +66,7 @@ export const Vendedor = () => {
     if (producto.options && producto.options.length > 0) {
       setProductoSeleccionado(producto);
     } else {
-      handleAddCarrito(producto);
+      handleAddCarrito({ ...producto, precioFinalUnitario: producto.price });
     }
   };
 
@@ -71,13 +74,22 @@ export const Vendedor = () => {
     if (!producto.selectedOptions) {
       return producto.id;
     }
-    return `${producto.id}-${Object.values(producto.selectedOptions).join(
-      '-'
-    )}`;
+    const optionsString = Object.values(producto.selectedOptions)
+      .map((option) => option.name)
+      .join('-');
+    return `${producto.id}-${optionsString}`;
   };
 
   const handleAddCarrito = (productoAgregado) => {
     const idItemCarrito = generarIdItemCarrito(productoAgregado);
+
+    let precioFinalUnitario = productoAgregado.price;
+    if (productoAgregado.selectedOptions) {
+      const precioOpciones = Object.values(
+        productoAgregado.selectedOptions
+      ).reduce((total, option) => total + option.extraPrice, 0);
+      precioFinalUnitario += precioOpciones;
+    }
 
     setCarrito((prevCarrito) => {
       const productoExistente = prevCarrito.find(
@@ -93,9 +105,16 @@ export const Vendedor = () => {
       }
       return [
         ...prevCarrito,
-        { ...productoAgregado, idItemCarrito, quantity: 1 },
+        {
+          ...productoAgregado,
+          idItemCarrito,
+          quantity: 1,
+          precioFinalUnitario,
+        },
       ];
     });
+
+    setProductoSeleccionado(null);
   };
 
   const handleRemoveCarrito = (idItemCarrito) => {
@@ -134,11 +153,11 @@ export const Vendedor = () => {
   return (
     <div className="min-h-screen bg-fondo">
       <div className="lg:flex min-h-screen">
-        <div className="flex flex-col min-h-screen w-full lg:w-3/4 overflow-y-auto">
+        <div className="flex flex-col min-h-screen flex-1 overflow-y-auto">
           <Header />
           <main className="flex-1 p-6 lg:p-12">
             <FiltroCategoria />
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8 mt-8">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8 mt-8">
               {productos.map((p) => (
                 <div
                   key={p.id}
@@ -163,7 +182,7 @@ export const Vendedor = () => {
             />
           </div>
         </div>
-        <div className="hidden lg:block lg:w-1/4">
+        <div className="hidden lg:block lg:w-1/4 lg:min-w-[400px]">
           <PedidoActual
             cart={carrito}
             onClearCart={handleClearCarrito}

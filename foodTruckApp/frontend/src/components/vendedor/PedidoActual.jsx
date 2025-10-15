@@ -1,19 +1,13 @@
-/**
- * Muestra el resumen del pedido actual en una barra lateral.
- * @param {object} props
- * @param {Array} props.cart - Array de productos en el carrito.
- * @param {Function} props.onClearCart - Función para vaciar el carrito.
- * ✨ CAMBIO: Actualizamos los nombres de las props y sus descripciones.
- * @param {Function} props.onAgregarAlCarrito - Función para aumentar cantidad (recibe el item completo).
- * @param {Function} props.onRemoverDelCarrito - Función para disminuir cantidad (recibe el idItemCarrito).
- */
 export const PedidoActual = ({
   cart = [],
   onClearCart = () => {},
   onAgregarAlCarrito = () => {},
   onRemoverDelCarrito = () => {},
 }) => {
-  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const total = cart.reduce(
+    (sum, item) => sum + item.precioFinalUnitario * item.quantity,
+    0
+  );
 
   const formatCurrency = (value) =>
     new Intl.NumberFormat('es-CL', {
@@ -28,13 +22,13 @@ export const PedidoActual = ({
     <aside
       className="
         h-screen sticky top-0
-        w-full lg:w-full
+        w-full 
         p-4 lg:p-8 bg-primario/5 shadow-lg lg:shadow-none
         flex flex-col justify-between border-l-2 border-l-primario z-40
       "
       aria-label="Pedido actual"
     >
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <h2 className="text-2xl font-bold mb-4 lg:mb-6">Pedido Actual</h2>
 
         {cart.length === 0 ? (
@@ -46,17 +40,25 @@ export const PedidoActual = ({
             {cart.map((item) => (
               <li
                 key={item.idItemCarrito}
-                className="flex justify-between items-center gap-4"
+                className="flex flex-col items-start gap-4 2xl:flex-row 2xl:justify-between"
                 aria-live="polite"
               >
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold truncate">{item.name}</p>
                   {item.selectedOptions && (
-                    <div className="pl-2">
+                    <div>
                       {Object.entries(item.selectedOptions).map(
                         ([opcion, eleccion]) => (
-                          <p key={opcion} className="text-sm text-placeholder">
-                            - {opcion}: {eleccion}
+                          <p
+                            key={opcion}
+                            className="text-sm text-placeholder mb-1"
+                          >
+                            {eleccion.name}{' '}
+                            {eleccion.extraPrice > 0 && (
+                              <span className="text-texto/50">
+                                (+{formatCurrency(eleccion.extraPrice)})
+                              </span>
+                            )}
                           </p>
                         )
                       )}
@@ -64,7 +66,7 @@ export const PedidoActual = ({
                   )}
 
                   <p className="text-md font-semibold text-texto/60">
-                    {formatCurrency(item.price)}
+                    {formatCurrency(item.precioFinalUnitario)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -116,7 +118,7 @@ export const PedidoActual = ({
         <button
           type="button"
           onClick={onClearCart}
-          className="w-full py-3 rounded-md font-semibold bg-secundario hover:bg-secundario/80  border border-border text-fondo transition duration-300"
+          className="w-full py-3 rounded-md font-semibold bg-secundario hover:bg-secundario/80 border border-border text-fondo transition duration-300"
         >
           Cancelar
         </button>

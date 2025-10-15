@@ -1,82 +1,146 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export const OpcionesModal = ({ product, onCerrar, onAgregarAlCarrito }) => {
-  const [selectedOptions, setSelectedOptions] = useState(() => {
-    const initialState = {};
-    if (product.options) {
-      product.options.forEach((opt) => {
-        initialState[opt.name] = opt.choices[0];
+  const [selectedOptions, setSelectedOptions] = useState({});
+  const [openMenus, setOpenMenus] = useState({});
+  const modalRef = useRef(null);
+
+  useEffect(() => {
+    const defaultOptions = {};
+    if (product?.options) {
+      product.options.forEach((option) => {
+        defaultOptions[option.name] = option.choices[0];
       });
     }
-    return initialState;
-  });
+    setSelectedOptions(defaultOptions);
+  }, [product]);
 
-  const handleOptionChange = (optionName, value) => {
-    setSelectedOptions((prev) => ({ ...prev, [optionName]: value }));
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        setOpenMenus({});
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const toggleMenu = (optionName) => {
+    setOpenMenus((prev) => ({
+      ...Object.keys(prev).reduce((acc, key) => ({ ...acc, [key]: false }), {}),
+      [optionName]: !prev[optionName],
+    }));
+  };
+
+  const handleSelectOption = (optionName, choice) => {
+    setSelectedOptions((prev) => ({
+      ...prev,
+      [optionName]: choice,
+    }));
+    setOpenMenus({});
   };
 
   const handleAgregarClick = () => {
-    const productWithOptions = {
+    const productoConOpciones = {
       ...product,
-      selectedOptions,
+      selectedOptions: selectedOptions,
     };
-    onAgregarAlCarrito(productWithOptions);
-    onCerrar();
+    onAgregarAlCarrito(productoConOpciones);
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-      <div className="bg-fondo p-6 rounded-2xl shadow-xl w-full max-w-md border-4 border-primario">
-        <h2 className="text-2xl font-bold mb-6 pb-4 border-b-2 border-primario">
-          {product.name}
-        </h2>
+  const formatCurrency = (value) =>
+    new Intl.NumberFormat('es-CL', {
+      style: 'currency',
+      currency: 'CLP',
+      maximumFractionDigits: 0,
+    }).format(value);
 
-        <div className="space-y-4">
-          {product.options?.map((option) => (
-            <div key={option.name}>
-              <label className="block text-md font-semibold text-texto-principal mb-2">
+  if (!product) return null;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      onClick={onCerrar}
+    >
+      <div
+        ref={modalRef}
+        className="bg-fondo p-6 md:p-8 rounded-xl shadow-2xl w-full max-w-lg animate-fade-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-3xl font-bold mb-6 text-texto">{product.name}</h2>
+        <div className="space-y-5">
+          {product.options.map((option) => (
+            <div key={option.name} className="relative">
+              <label className="block text-md font-semibold mb-2 text-texto/80">
                 {option.name}
               </label>
-              <select
-                className="
-                  appearance-none 
-                  w-full py-2 px-3 
-                  bg-white 
-                  border-2 border-primario 
-                  rounded-lg 
-                  shadow-sm 
-                  focus:outline-none focus:ring-2 focus:ring-primario/50
-                  text-md
-                  bg-[url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>')] 
-                  bg-no-repeat bg-right
-                "
-                value={selectedOptions[option.name] || ''}
-                onChange={(e) =>
-                  handleOptionChange(option.name, e.target.value)
-                }
+              <button
+                type="button"
+                onClick={() => toggleMenu(option.name)}
+                className="w-full p-3 bg-white border-2 border-primario rounded-lg 
+                           focus:outline-none focus:ring-2 focus:ring-primario focus:border-transparent 
+                           transition-all text-left flex justify-between items-center"
               >
-                {option.choices.map((choice) => (
-                  <option key={choice} value={choice}>
-                    {choice}
-                  </option>
-                ))}
-              </select>
+                <span>
+                  {selectedOptions[option.name]?.name}
+                  {selectedOptions[option.name]?.extraPrice > 0 &&
+                    ` (+${formatCurrency(
+                      selectedOptions[option.name]?.extraPrice
+                    )})`}
+                </span>
+                <svg
+                  className={`w-5 h-5 transition-transform ${
+                    openMenus[option.name] ? 'transform rotate-180' : ''
+                  }`}
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+              {openMenus[option.name] && (
+                <div
+                  className="absolute z-10 mt-2 w-full bg-white border-2 border-primario rounded-lg 
+                             shadow-lg max-h-60 overflow-auto"
+                >
+                  {option.choices.map((choice) => (
+                    <div
+                      key={choice.name}
+                      onClick={() => handleSelectOption(option.name, choice)}
+                      className="p-3 hover:bg-primario/10 cursor-pointer"
+                    >
+                      {choice.name}
+                      {choice.extraPrice > 0 &&
+                        ` (+${formatCurrency(choice.extraPrice)})`}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
 
-        <div className="mt-8 pt-4 border-t-2 border-primario/20 flex justify-end space-x-4">
+        <div className="mt-8 flex flex-col-reverse sm:flex-row justify-end gap-3">
           <button
+            type="button"
             onClick={onCerrar}
-            className="px-6 py-2 rounded-md font-semibold bg-secundario hover:bg-secundario/80 border border-border text-fondo transition-all duration-300"
+            className="w-full sm:w-auto py-3 px-6 rounded-lg font-semibold bg-muted text-texto hover:bg-muted/80 transition-colors"
           >
             Cancelar
           </button>
           <button
+            type="button"
             onClick={handleAgregarClick}
-            className="px-6 py-2 rounded-md font-semibold bg-primario text-white shadow-md hover:brightness-105 transition-all duration-300"
+            className="w-full sm:w-auto py-3 px-6 rounded-lg font-semibold bg-primario text-white shadow-md hover:brightness-105 transition-all"
           >
-            Agregar
+            Agregar al Pedido
           </button>
         </div>
       </div>
