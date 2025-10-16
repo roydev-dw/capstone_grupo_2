@@ -1,4 +1,4 @@
-const DUMMY_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const DEVS_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const FOODTRUCKS_API_BASE_URL = import.meta.env.VITE_API_BASE_URL_FOODTRUCKS;
 
 const createApiInstance = (baseURL) => {
@@ -42,5 +42,5 @@ const createApiInstance = (baseURL) => {
   };
 };
 
-export const api = createApiInstance(DUMMY_API_BASE_URL);
+export const apiProductos = createApiInstance(DEVS_API_BASE_URL);
 export const apiFoodTrucks = createApiInstance(FOODTRUCKS_API_BASE_URL);

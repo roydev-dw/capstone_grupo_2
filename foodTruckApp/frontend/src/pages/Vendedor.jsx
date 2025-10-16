@@ -4,25 +4,53 @@ import { FiltroCategoria } from '../components/vendedor/FiltroCategoria';
 import { Header } from '../components/vendedor/Header';
 import { PedidoActual } from '../components/vendedor/PedidoActual';
 import { TarjetaProducto } from '../components/vendedor/TarjetaProducto';
-import { api } from '../utils/api';
+import { apiProductos } from '../utils/api';
+import { OpcionesModal } from '../components/vendedor/ModalOpciones';
 
 export const Vendedor = () => {
   const [productos, setProductos] = useState([]);
   const [carrito, setCarrito] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [isMobileAbrirCarrito, setIsMobileAbrirCarrito] = useState(false);
 
   useEffect(() => {
     const fetchProductos = async () => {
       try {
         setLoading(true);
-        const data = await api.get('products/category/groceries');
+        const data = await apiProductos.get('api-fast-food');
 
-        const productosNormalizados = data.products.map((producto) => ({
-          id: producto.id,
-          name: producto.title,
-          price: producto.price,
-          image: producto.thumbnail,
-        }));
+        const productosNormalizados = data.map((producto) => {
+          const p = {
+            id: producto.id,
+            name: producto.name,
+            price: producto.price,
+            image: producto.image,
+            category: producto.category,
+          };
+          if (producto.category === 'cafe') {
+            p.options = [
+              {
+                name: 'Café',
+                choices: [
+                  { name: 'Cafeinado', extraPrice: 0 },
+                  { name: 'Descafeinado', extraPrice: 200 },
+                ],
+              },
+              {
+                name: 'Leche',
+                choices: [
+                  { name: 'Entera', extraPrice: 0 },
+                  { name: 'Descremada', extraPrice: 0 },
+                  { name: 'Semidescremada', extraPrice: 0 },
+                  { name: 'Sin Lactosa', extraPrice: 300 },
+                  { name: 'Vegetal', extraPrice: 500 },
+                ],
+              },
+            ];
+          }
+          return p;
+        });
 
         setProductos(productosNormalizados);
       } catch (error) {
@@ -35,33 +63,78 @@ export const Vendedor = () => {
     fetchProductos();
   }, []);
 
+  const handleProductClick = (producto) => {
+    if (producto.options && producto.options.length > 0) {
+      setProductoSeleccionado(producto);
+    } else {
+      handleAddCarrito({ ...producto, precioFinalUnitario: producto.price });
+    }
+  };
+
+  const generarIdItemCarrito = (producto) => {
+    if (!producto.selectedOptions) {
+      return producto.id;
+    }
+    const optionsString = Object.values(producto.selectedOptions)
+      .map((option) => option.name)
+      .join('-');
+    return `${producto.id}-${optionsString}`;
+  };
+
   const handleAddCarrito = (productoAgregado) => {
+    const idItemCarrito = generarIdItemCarrito(productoAgregado);
+
+    let precioFinalUnitario = productoAgregado.price;
+    if (productoAgregado.selectedOptions) {
+      const precioOpciones = Object.values(
+        productoAgregado.selectedOptions
+      ).reduce((total, option) => total + option.extraPrice, 0);
+      precioFinalUnitario += precioOpciones;
+    }
+
     setCarrito((prevCarrito) => {
       const productoExistente = prevCarrito.find(
-        (item) => item.id === productoAgregado.id
+        (item) => item.idItemCarrito === idItemCarrito
       );
+
       if (productoExistente) {
         return prevCarrito.map((item) =>
-          item.id === productoAgregado.id
+          item.idItemCarrito === idItemCarrito
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
-      return [...prevCarrito, { ...productoAgregado, quantity: 1 }];
+      return [
+        ...prevCarrito,
+        {
+          ...productoAgregado,
+          idItemCarrito,
+          quantity: 1,
+          precioFinalUnitario,
+        },
+      ];
     });
+
+    setProductoSeleccionado(null);
   };
 
-  const handleRemoveCarrito = (productoId) => {
+  const handleRemoveCarrito = (idItemCarrito) => {
     setCarrito((prevCarrito) => {
       const productoExistente = prevCarrito.find(
-        (item) => item.id === productoId
+        (item) => item.idItemCarrito === idItemCarrito
       );
       if (!productoExistente) return prevCarrito;
+
       if (productoExistente.quantity === 1) {
-        return prevCarrito.filter((item) => item.id !== productoId);
+        return prevCarrito.filter(
+          (item) => item.idItemCarrito !== idItemCarrito
+        );
       }
+
       return prevCarrito.map((item) =>
-        item.id === productoId ? { ...item, quantity: item.quantity - 1 } : item
+        item.idItemCarrito === idItemCarrito
+          ? { ...item, quantity: item.quantity - 1 }
+          : item
       );
     });
   };
@@ -79,39 +152,70 @@ export const Vendedor = () => {
   }
 
   return (
-    <div className="min-h-screen bg-fondo">
+    <div className="min-h-screen bg-elemento ">
       <div className="lg:flex min-h-screen">
-        <div className="flex flex-col min-h-screen w-full lg:w-3/4 overflow-y-auto">
+        <div className="flex flex-col min-h-screen flex-1 overflow-y-auto">
           <Header />
-          <main className="flex-1 p-6 lg:p-12">
+          <main className="flex-1 px-6 pb-6 pt-40 lg:p-12">
             <FiltroCategoria />
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4 mt-8">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 grid-cols-extra gap-8 mt-8">
               {productos.map((p) => (
                 <div
                   key={p.id}
                   className="cursor-pointer"
-                  onClick={() => handleAddCarrito(p)}
+                  onClick={() => handleProductClick(p)}
                 >
                   <TarjetaProducto product={p} />
                 </div>
               ))}
             </div>
+            {productoSeleccionado && (
+              <OpcionesModal
+                product={productoSeleccionado}
+                onCerrar={() => setProductoSeleccionado(null)}
+                onAgregarAlCarrito={handleAddCarrito}
+              />
+            )}
           </main>
           <div className="lg:hidden">
             <BotonTarjeta
               cartCount={carrito.reduce((sum, item) => sum + item.quantity, 0)}
+              onClick={() => setIsMobileAbrirCarrito(true)}
             />
           </div>
         </div>
-        <div className="hidden lg:block lg:w-1/4">
+
+        <div className="hidden lg:block lg:w-1/4 lg:min-w-[400px]">
           <PedidoActual
             cart={carrito}
             onClearCart={handleClearCarrito}
-            onAddToCart={handleAddCarrito}
-            onRemoveFromCart={handleRemoveCarrito}
+            onAgregarAlCarrito={handleAddCarrito}
+            onRemoverDelCarrito={handleRemoveCarrito}
           />
         </div>
       </div>
+
+      {isMobileAbrirCarrito && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 lg:hidden"
+          onClick={() => setIsMobileAbrirCarrito(false)}
+          aria-modal="true"
+          role="dialog"
+        >
+          <div
+            className="absolute right-0 top-0 h-full w-full max-w-sm bg-fondo shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PedidoActual
+              cart={carrito}
+              onClearCart={handleClearCarrito}
+              onAgregarAlCarrito={handleAddCarrito}
+              onRemoverDelCarrito={handleRemoveCarrito}
+              onClose={() => setIsMobileAbrirCarrito(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
