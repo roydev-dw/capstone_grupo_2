@@ -33,7 +33,7 @@ export const PedidoActual = ({
     >
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="flex justify-between items-center mb-4 lg:mb-6">
-          <h2 className="text-2xl font-bold">Pedido Actual</h2>
+          <h2 className="text-xl font-bold">Pedido Actual</h2>
           {onClose && (
             <button
               onClick={onClose}
@@ -78,7 +78,7 @@ export const PedidoActual = ({
                       )}
                     </div>
                   )}
-                  <p className="text-md font-semibold text-texto/60">
+                  <p className="text-sm font-semibold text-texto/60">
                     {formatCurrency(item.precioFinalUnitario)}
                   </p>
                 </div>
@@ -92,7 +92,7 @@ export const PedidoActual = ({
                   >
                     <span className="text-lg">−</span>
                   </button>
-                  <span className="px-2 text-lg font-bold min-w-[28px] text-center">
+                  <span className="px-2 text-sm font-bold min-w-[28px] text-center">
                     {item.quantity}
                   </span>
                   <button
@@ -111,8 +111,8 @@ export const PedidoActual = ({
       </div>
       <div className="mt-4 lg:mt-6 border-t-2 border-primario pt-4">
         <div className="flex justify-between items-center mb-4">
-          <span className="font-bold text-lg">Total</span>
-          <span className="font-bold text-lg">{formatCurrency(total)}</span>
+          <span className="font-bold text-md">Total</span>
+          <span className="font-bold text-md">{formatCurrency(total)}</span>
         </div>
         <button
           type="button"

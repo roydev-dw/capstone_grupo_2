@@ -54,7 +54,6 @@ export const Login = () => {
           </p>
         </div>
 
-        {/* Formulario */}
         <form
           onSubmit={handleLogin}
           className="space-y-4 bg-elemento px-8 py-12 rounded-2xl shadow-lg"
