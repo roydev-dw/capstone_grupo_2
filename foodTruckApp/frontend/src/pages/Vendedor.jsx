@@ -12,6 +12,7 @@ export const Vendedor = () => {
   const [carrito, setCarrito] = useState([]);
   const [loading, setLoading] = useState(true);
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [isMobileAbrirCarrito, setIsMobileAbrirCarrito] = useState(false);
 
   useEffect(() => {
     const fetchProductos = async () => {
@@ -151,13 +152,13 @@ export const Vendedor = () => {
   }
 
   return (
-    <div className="min-h-screen bg-fondo">
+    <div className="min-h-screen bg-elemento ">
       <div className="lg:flex min-h-screen">
         <div className="flex flex-col min-h-screen flex-1 overflow-y-auto">
           <Header />
-          <main className="flex-1 p-6 lg:p-12">
+          <main className="flex-1 px-6 pb-6 pt-40 lg:p-12">
             <FiltroCategoria />
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8 mt-8">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 grid-cols-extra gap-8 mt-8">
               {productos.map((p) => (
                 <div
                   key={p.id}
@@ -179,9 +180,11 @@ export const Vendedor = () => {
           <div className="lg:hidden">
             <BotonTarjeta
               cartCount={carrito.reduce((sum, item) => sum + item.quantity, 0)}
+              onClick={() => setIsMobileAbrirCarrito(true)}
             />
           </div>
         </div>
+
         <div className="hidden lg:block lg:w-1/4 lg:min-w-[400px]">
           <PedidoActual
             cart={carrito}
@@ -191,6 +194,28 @@ export const Vendedor = () => {
           />
         </div>
       </div>
+
+      {isMobileAbrirCarrito && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 lg:hidden"
+          onClick={() => setIsMobileAbrirCarrito(false)}
+          aria-modal="true"
+          role="dialog"
+        >
+          <div
+            className="absolute right-0 top-0 h-full w-full max-w-sm bg-fondo shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PedidoActual
+              cart={carrito}
+              onClearCart={handleClearCarrito}
+              onAgregarAlCarrito={handleAddCarrito}
+              onRemoverDelCarrito={handleRemoveCarrito}
+              onClose={() => setIsMobileAbrirCarrito(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

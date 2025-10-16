@@ -1,8 +1,11 @@
+import { HiXMark } from 'react-icons/hi2';
+
 export const PedidoActual = ({
   cart = [],
   onClearCart = () => {},
   onAgregarAlCarrito = () => {},
   onRemoverDelCarrito = () => {},
+  onClose,
 }) => {
   const total = cart.reduce(
     (sum, item) => sum + item.precioFinalUnitario * item.quantity,
@@ -23,13 +26,24 @@ export const PedidoActual = ({
       className="
         h-screen sticky top-0
         w-full 
-        p-4 lg:p-8 bg-primario/5 shadow-lg lg:shadow-none
-        flex flex-col justify-between border-l-2 border-l-primario z-40
+        p-4 lg:p-8 bg-fondo lg:bg-primario/5 shadow-lg lg:shadow-none
+        flex flex-col justify-between border-l-2 border-l-primario
       "
       aria-label="Pedido actual"
     >
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <h2 className="text-2xl font-bold mb-4 lg:mb-6">Pedido Actual</h2>
+        <div className="flex justify-between items-center mb-4 lg:mb-6">
+          <h2 className="text-2xl font-bold">Pedido Actual</h2>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1 rounded-full hover:bg-black/10 lg:hidden"
+              aria-label="Cerrar pedido"
+            >
+              <HiXMark className="h-6 w-6" />
+            </button>
+          )}
+        </div>
 
         {cart.length === 0 ? (
           <p className="text-sm text-placeholder flex-1 min-h-[120px]">
@@ -64,7 +78,6 @@ export const PedidoActual = ({
                       )}
                     </div>
                   )}
-
                   <p className="text-md font-semibold text-texto/60">
                     {formatCurrency(item.precioFinalUnitario)}
                   </p>
@@ -79,11 +92,9 @@ export const PedidoActual = ({
                   >
                     <span className="text-lg">−</span>
                   </button>
-
                   <span className="px-2 text-lg font-bold min-w-[28px] text-center">
                     {item.quantity}
                   </span>
-
                   <button
                     type="button"
                     aria-label={`Aumentar cantidad de ${item.name}`}

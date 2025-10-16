@@ -21,3 +21,11 @@ body {
   color: var(--color-texto);
   background-color: var(--color-fondo);
 }
+
+@layer utilities {
+  .grid-cols-extra {
+    @media (min-width: 2000px) {
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+    }
+  }
+}
