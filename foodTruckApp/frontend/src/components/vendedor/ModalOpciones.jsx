@@ -1,19 +1,28 @@
 import { useState, useEffect, useRef } from 'react';
 
-export const OpcionesModal = ({ product, onCerrar, onAgregarAlCarrito }) => {
+export const OpcionesModal = ({
+  product,
+  isEditing = false,
+  onCerrar,
+  onAgregarAlCarrito,
+}) => {
   const [selectedOptions, setSelectedOptions] = useState({});
   const [openMenus, setOpenMenus] = useState({});
   const modalRef = useRef(null);
 
   useEffect(() => {
-    const defaultOptions = {};
-    if (product?.options) {
-      product.options.forEach((option) => {
-        defaultOptions[option.name] = option.choices[0];
-      });
+    if (isEditing && product?.selectedOptions) {
+      setSelectedOptions(product.selectedOptions);
+    } else {
+      const defaultOptions = {};
+      if (product?.options) {
+        product.options.forEach((option) => {
+          defaultOptions[option.name] = option.choices[0];
+        });
+      }
+      setSelectedOptions(defaultOptions);
     }
-    setSelectedOptions(defaultOptions);
-  }, [product]);
+  }, [product, isEditing]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -80,8 +89,8 @@ export const OpcionesModal = ({ product, onCerrar, onAgregarAlCarrito }) => {
                 type="button"
                 onClick={() => toggleMenu(option.name)}
                 className="w-full p-3 bg-white border-2 border-primario rounded-lg 
-                           focus:outline-none focus:ring-2 focus:ring-primario focus:border-transparent 
-                           transition-all text-left flex justify-between items-center"
+                            focus:outline-none focus:ring-2 focus:ring-primario focus:border-transparent 
+                            transition-all text-left flex justify-between items-center"
               >
                 <span>
                   {selectedOptions[option.name]?.name}
@@ -106,10 +115,7 @@ export const OpcionesModal = ({ product, onCerrar, onAgregarAlCarrito }) => {
                 </svg>
               </button>
               {openMenus[option.name] && (
-                <div
-                  className="absolute z-10 mt-2 w-full bg-white border-2 border-primario rounded-lg 
-                             shadow-lg max-h-60 overflow-auto"
-                >
+                <div className="absolute z-10 mt-2 w-full bg-white border-2 border-primario rounded-lg shadow-lg max-h-60 overflow-auto">
                   {option.choices.map((choice) => (
                     <div
                       key={choice.name}
@@ -140,7 +146,7 @@ export const OpcionesModal = ({ product, onCerrar, onAgregarAlCarrito }) => {
             onClick={handleAgregarClick}
             className="w-full sm:w-auto py-3 px-6 rounded-lg font-semibold bg-primario text-white shadow-md hover:brightness-105 transition-all"
           >
-            Agregar al Pedido
+            {isEditing ? 'Actualizar Opciones' : 'Agregar al Pedido'}
           </button>
         </div>
       </div>
