@@ -1,17 +1,13 @@
 @import 'tailwindcss';
 
 @theme {
-  /* --- Fuentes y Radios --- */
   --font-logo: 'Luckiest Guy', system-ui;
   --font-body: 'Poppins', sans-serif;
 
-  /* --- Colores Principales --- */
   --color-fondo: #faf9f6; /* Blanco hueso (fondo base) */
   --color-elemento: #ffffff; /* Blanco puro (tarjetas, contenedores) */
   --color-primario: #c1904d; /* Caramelo cálido */
   --color-secundario: #7b8c5b; /* Verde oliva complementario */
-
-  /* --- Colores Neutros --- */
   --color-texto: #333333; /* Gris oscuro para texto */
   --color-placeholder: #bcbcbc; /* Gris claro para inputs y detalles */
 }
