@@ -18,62 +18,70 @@ export const Vendedor = () => {
   const [itemParaEditar, setItemParaEditar] = useState(null);
 
   useEffect(() => {
-    const fetchProductos = async () => {
-      setLoading(true);
+    const syncProductos = async () => {
+      const productosEnDB = await db.productos.count();
+      if (productosEnDB === 0) {
+        console.log('Base de datos vacía, se mostrará "Cargando..."');
+        setLoading(true);
+      } else {
+        console.log('Mostrando productos desde caché (stale)...');
+        setLoading(false);
+      }
+
       try {
-        const productosEnDB = await db.productos.count();
+        console.log('Intentando sincronizar con la API (revalidate)...');
+        const data = await apiProductos.get('api-fast-food');
 
-        if (productosEnDB === 0) {
-          console.log('No hay productos en caché, buscando en API...');
-          const data = await apiProductos.get('api-fast-food');
+        const productosNormalizados = data.map((producto) => {
+          const p = {
+            id: producto.id,
+            name: producto.name,
+            price: producto.price,
+            image: producto.image,
+            category: producto.category,
+          };
+          if (producto.category === 'cafe') {
+            p.options = [
+              {
+                name: 'Café',
+                choices: [
+                  { name: 'Cafeinado', extraPrice: 0 },
+                  { name: 'Descafeinado', extraPrice: 200 },
+                ],
+              },
+              {
+                name: 'Leche',
+                choices: [
+                  { name: 'Entera', extraPrice: 0 },
+                  { name: 'Descremada', extraPrice: 0 },
+                  { name: 'Semidescremada', extraPrice: 0 },
+                  { name: 'Sin Lactosa', extraPrice: 300 },
+                  { name: 'Vegetal', extraPrice: 500 },
+                ],
+              },
+            ];
+          }
+          return p;
+        });
 
-          const productosNormalizados = data.map((producto) => {
-            const p = {
-              id: producto.id,
-              name: producto.name,
-              price: producto.price,
-              image: producto.image,
-              category: producto.category,
-            };
-            if (producto.category === 'cafe') {
-              p.options = [
-                {
-                  name: 'Café',
-                  choices: [
-                    { name: 'Cafeinado', extraPrice: 0 },
-                    { name: 'Descafeinado', extraPrice: 200 },
-                  ],
-                },
-                {
-                  name: 'Leche',
-                  choices: [
-                    { name: 'Entera', extraPrice: 0 },
-                    { name: 'Descremada', extraPrice: 0 },
-                    { name: 'Semidescremada', extraPrice: 0 },
-                    { name: 'Sin Lactosa', extraPrice: 300 },
-                    { name: 'Vegetal', extraPrice: 500 },
-                  ],
-                },
-              ];
-            }
-            return p;
-          });
-
+        await db.transaction('rw', db.productos, async () => {
+          await db.productos.clear();
           await db.productos.bulkAdd(productosNormalizados);
-          console.log('Productos guardados en caché.');
-        } else {
-          console.log('Productos cargados desde la caché de IndexedDB.');
-        }
+        });
+
+        console.log('Caché de productos actualizada (revalidated).');
       } catch (error) {
-        console.error('Error al obtener productos:', error);
+        console.warn(
+          'Error al sincronizar con la API (probablemente offline):',
+          error.message
+        );
       } finally {
         setLoading(false);
       }
     };
 
-    fetchProductos();
+    syncProductos();
   }, []);
-
   const handleProductClick = (producto) => {
     if (producto.options && producto.options.length > 0) {
       setProductoSeleccionado(producto);
