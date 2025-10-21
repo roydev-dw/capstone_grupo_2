@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { db } from '../utils/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { OpcionesModal } from '../components/vendedor/ModalOpciones';
@@ -11,25 +11,49 @@ import { BotonTarjeta } from '../components/vendedor/BotonTarjeta';
 
 export const Vendedor = () => {
   const [loading, setLoading] = useState(true);
-  const carrito = useLiveQuery(() => db.carrito.toArray(), []) || [];
-  const productos = useLiveQuery(() => db.productos.toArray(), []) || [];
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [isMobileAbrirCarrito, setIsMobileAbrirCarrito] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
 
+  const carrito = useLiveQuery(() => db.carrito.toArray(), []) || [];
+  const productos = useLiveQuery(() => db.productos.toArray(), []) || [];
+
+  const generarIdItemCarrito = useCallback((producto) => {
+    const base = String(producto.id);
+    if (!producto.selectedOptions) return base;
+
+    const partes = Object.entries(producto.selectedOptions)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([grupo, opt]) => `${grupo}:${opt.name}`);
+
+    return `${base}::${partes.join('|')}`;
+  }, []);
+
+  const calcularPrecioFinalUnitario = useCallback((producto) => {
+    const extras = producto.selectedOptions
+      ? Object.values(producto.selectedOptions).reduce(
+          (t, o) => t + (o.extraPrice || 0),
+          0
+        )
+      : 0;
+    return (producto.price || 0) + extras;
+  }, []);
+
   useEffect(() => {
+    let once = false;
+
     const syncProductos = async () => {
+      if (import.meta.env.DEV && once) return;
+      once = true;
+
       const productosEnDB = await db.productos.count();
       if (productosEnDB === 0) {
-        console.log('Base de datos vacía, se mostrará "Cargando..."');
         setLoading(true);
       } else {
-        console.log('Mostrando productos desde caché (stale)...');
         setLoading(false);
       }
 
       try {
-        console.log('Intentando sincronizar con la API (revalidate)...');
         const data = await apiProductos.get('api-fast-food');
 
         const productosNormalizados = data.map((producto) => {
@@ -65,15 +89,24 @@ export const Vendedor = () => {
         });
 
         await db.transaction('rw', db.productos, async () => {
-          await db.productos.clear();
-          await db.productos.bulkAdd(productosNormalizados);
-        });
+          const existentes = await db.productos.toCollection().primaryKeys();
+          const mapaNuevos = new Map(
+            productosNormalizados.map((p) => [String(p.id), p])
+          );
 
-        console.log('Caché de productos actualizada (revalidated).');
+          await db.productos.bulkPut(productosNormalizados);
+
+          const idsEliminar = existentes.filter(
+            (id) => !mapaNuevos.has(String(id))
+          );
+          if (idsEliminar.length) {
+            await db.productos.bulkDelete(idsEliminar);
+          }
+        });
       } catch (error) {
         console.warn(
           'Error al sincronizar con la API (probablemente offline):',
-          error.message
+          error?.message
         );
       } finally {
         setLoading(false);
@@ -82,114 +115,124 @@ export const Vendedor = () => {
 
     syncProductos();
   }, []);
-  const handleProductClick = (producto) => {
+
+  const handleProductClick = useCallback((producto) => {
     if (producto.options && producto.options.length > 0) {
       setProductoSeleccionado(producto);
     } else {
-      handleAddCarrito({ ...producto, precioFinalUnitario: producto.price });
+      handleAddCarrito({ ...producto, quantity: 1 });
     }
-  };
+  }, []);
 
-  const handleEditarItem = (idItemCarrito) => {
-    const item = carrito.find((i) => i.idItemCarrito === idItemCarrito);
-    if (item) {
-      setItemParaEditar(item);
-    }
-  };
+  const handleEditarItem = useCallback(
+    (idItemCarrito) => {
+      const item = carrito.find((i) => i.idItemCarrito === idItemCarrito);
+      if (item) setItemParaEditar(item);
+    },
+    [carrito]
+  );
 
-  const generarIdItemCarrito = (producto) => {
-    if (!producto.selectedOptions) {
-      return producto.id;
-    }
-    const optionsString = Object.values(producto.selectedOptions)
-      .map((option) => option.name)
-      .join('-');
-    return `${producto.id}-${optionsString}`;
-  };
+  const handleAddCarrito = useCallback(
+    async (productoAgregado) => {
+      const idItemCarrito = generarIdItemCarrito(productoAgregado);
+      const precioFinalUnitario = calcularPrecioFinalUnitario(productoAgregado);
+      const cantidad = productoAgregado.quantity || 1;
 
-  const handleAddCarrito = async (productoAgregado) => {
-    const idItemCarrito = generarIdItemCarrito(productoAgregado);
-
-    let precioFinalUnitario = productoAgregado.price;
-    if (productoAgregado.selectedOptions) {
-      const precioOpciones = Object.values(
-        productoAgregado.selectedOptions
-      ).reduce((total, option) => total + option.extraPrice, 0);
-      precioFinalUnitario += precioOpciones;
-    }
-
-    const productoExistente = await db.carrito.get(idItemCarrito);
-
-    if (productoExistente) {
-      await db.carrito.update(idItemCarrito, {
-        quantity: productoExistente.quantity + (productoAgregado.quantity || 1),
+      await db.transaction('rw', db.carrito, async () => {
+        const existente = await db.carrito.get(idItemCarrito);
+        if (existente) {
+          await db.carrito.update(idItemCarrito, {
+            quantity: existente.quantity + cantidad,
+          });
+        } else {
+          const { id, name, price, selectedOptions } = productoAgregado;
+          await db.carrito.add({
+            idItemCarrito,
+            id,
+            name,
+            price,
+            selectedOptions: selectedOptions || null,
+            quantity: cantidad,
+            precioFinalUnitario,
+          });
+        }
       });
-    } else {
-      await db.carrito.add({
-        ...productoAgregado,
-        idItemCarrito,
-        quantity: productoAgregado.quantity || 1,
-        precioFinalUnitario,
+
+      setProductoSeleccionado(null);
+    },
+    [calcularPrecioFinalUnitario, generarIdItemCarrito]
+  );
+
+  const handleActualizarItemEnCarrito = useCallback(
+    async (itemActualizado) => {
+      const idItemAntiguo = itemParaEditar.idItemCarrito;
+      const cantidadAntigua = itemParaEditar.quantity;
+
+      const idItemNuevo = generarIdItemCarrito(itemActualizado);
+      const precioFinalUnitario = calcularPrecioFinalUnitario(itemActualizado);
+
+      await db.transaction('rw', db.carrito, async () => {
+        await db.carrito.delete(idItemAntiguo);
+        const existenteNuevo = await db.carrito.get(idItemNuevo);
+        if (existenteNuevo) {
+          await db.carrito.update(idItemNuevo, {
+            quantity: existenteNuevo.quantity + cantidadAntigua,
+          });
+        } else {
+          const { id, name, price, selectedOptions } = itemActualizado;
+          await db.carrito.add({
+            idItemCarrito: idItemNuevo,
+            id,
+            name,
+            price,
+            selectedOptions: selectedOptions || null,
+            quantity: cantidadAntigua,
+            precioFinalUnitario,
+          });
+        }
       });
-    }
 
-    setProductoSeleccionado(null);
-  };
+      setItemParaEditar(null);
+    },
+    [itemParaEditar, calcularPrecioFinalUnitario, generarIdItemCarrito]
+  );
 
-  const handleActualizarItemEnCarrito = async (itemActualizado) => {
-    const idItemAntiguo = itemParaEditar.idItemCarrito;
-    const cantidadAntigua = itemParaEditar.quantity;
-
-    const idItemNuevo = generarIdItemCarrito(itemActualizado);
-    let precioFinalUnitario = itemActualizado.price;
-    if (itemActualizado.selectedOptions) {
-      const precioOpciones = Object.values(
-        itemActualizado.selectedOptions
-      ).reduce((total, option) => total + option.extraPrice, 0);
-      precioFinalUnitario += precioOpciones;
-    }
-
+  const handleRemoveCarrito = useCallback(async (idItemCarrito) => {
     await db.transaction('rw', db.carrito, async () => {
-      await db.carrito.delete(idItemAntiguo);
-      const itemExistenteConNuevasOpciones = await db.carrito.get(idItemNuevo);
+      const existente = await db.carrito.get(idItemCarrito);
+      if (!existente) return;
 
-      if (itemExistenteConNuevasOpciones) {
-        await db.carrito.update(idItemNuevo, {
-          quantity: itemExistenteConNuevasOpciones.quantity + cantidadAntigua,
-        });
+      if (existente.quantity <= 1) {
+        await db.carrito.delete(idItemCarrito);
       } else {
-        await db.carrito.add({
-          ...itemActualizado,
-          idItemCarrito: idItemNuevo,
-          precioFinalUnitario: precioFinalUnitario,
-          quantity: cantidadAntigua,
+        await db.carrito.update(idItemCarrito, {
+          quantity: existente.quantity - 1,
         });
       }
     });
+  }, []);
 
-    setItemParaEditar(null);
-  };
-
-  const handleRemoveCarrito = async (idItemCarrito) => {
-    const productoExistente = await db.carrito.get(idItemCarrito);
-    if (!productoExistente) return;
-
-    if (productoExistente.quantity === 1) {
+  const handleEliminarItem = useCallback(async (idItemCarrito) => {
+    await db.transaction('rw', db.carrito, async () => {
       await db.carrito.delete(idItemCarrito);
-    } else {
-      await db.carrito.update(idItemCarrito, {
-        quantity: productoExistente.quantity - 1,
-      });
-    }
-  };
+    });
+  }, []);
 
-  const handleEliminarItem = async (idItemCarrito) => {
-    await db.carrito.delete(idItemCarrito);
-  };
+  const handleClearCarrito = useCallback(async () => {
+    await db.transaction('rw', db.carrito, async () => {
+      await db.carrito.clear();
+    });
+  }, []);
 
-  const handleClearCarrito = async () => {
-    await db.carrito.clear();
-  };
+  const onModalClose = useCallback(() => {
+    setProductoSeleccionado(null);
+    setItemParaEditar(null);
+  }, []);
+
+  const cartCount = useMemo(
+    () => carrito.reduce((sum, item) => sum + item.quantity, 0),
+    [carrito]
+  );
 
   if (loading) {
     return (
@@ -204,11 +247,6 @@ export const Vendedor = () => {
   const onModalSubmit = itemParaEditar
     ? handleActualizarItemEnCarrito
     : handleAddCarrito;
-
-  const onModalClose = () => {
-    setProductoSeleccionado(null);
-    setItemParaEditar(null);
-  };
 
   return (
     <div className="min-h-screen bg-elemento ">
@@ -238,9 +276,10 @@ export const Vendedor = () => {
               />
             )}
           </main>
+
           <div className="lg:hidden">
             <BotonTarjeta
-              cartCount={carrito.reduce((sum, item) => sum + item.quantity, 0)}
+              cartCount={cartCount}
               onClick={() => setIsMobileAbrirCarrito(true)}
             />
           </div>
