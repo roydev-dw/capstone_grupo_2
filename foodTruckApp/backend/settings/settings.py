@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+import datetime
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -28,12 +29,20 @@ DEBUG = True
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
+    '20.172.13.183',
+    'http://foodtrucksapp.cl'
+    'https://foodtrucksapp.cl',
+    'http://www.foodtrucksapp.cl',
+    'https://www.foodtrucksapp.cl',
+    'foodtrucksapp.cl',
+    'www.foodtrucksapp.cl',
 ]
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'corsheaders',
     'core',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -44,6 +53,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -52,6 +62,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+CORS_ALLOW_ALL_ORIGINS = True
 
 ROOT_URLCONF = 'settings.urls'
 
@@ -79,10 +91,29 @@ WSGI_APPLICATION = 'settings.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'mssql',  # mssql-django
+        'NAME': 'bdfoodtruck',
+        'USER': 'vincent',
+        'PASSWORD': 'Pw7LhzxEnaCNTgZ',  # <-- sin llaves
+        'HOST': 'appfoodtruck.database.windows.net',
+        'PORT': '1433',
+        'OPTIONS': {
+            'driver': 'ODBC Driver 18 for SQL Server',
+            'encrypt': True,
+            'trust_server_certificate': False,
+            # 'connection_timeout': 30,   # opcional
+        },
     }
 }
+
+
+
+# DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.sqlite3',
+#        'NAME': BASE_DIR / 'db.sqlite3',
+#    }
+#}
 
 
 # Password validation
@@ -130,4 +161,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/home/'
 LOGOUT_REDIRECT_URL = '/login/'
+
+# Configuración de JWT
+
+JWT_SECRET_KEY = "9RS05stB0N1lcsb77L2POJV2SDNi5Oz-5NqwycNme3U0E0MRxHOh72Cl4fOkuNFyoFNJ4RTweUPyGAcnmCnZCA"
+JWT_ALGORITHM = 'HS256' # Algoritmo de firma
+JWT_ACCESS_TTL = datetime.timedelta(minutes=60) # Token válido por 60 minutos
+JWT_REFRESH_TTL = datetime.timedelta(days=7) # Refresh token válido por 7 días
+
 

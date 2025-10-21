@@ -32,7 +32,7 @@ class Sucursal(models.Model):
     
 class Rol(models.Model):
     rol_id = models.AutoField(primary_key=True, db_column='RolId')
-    empresa = models.ForeignKey('Empresa', on_delete=models.CASCADE, db_column='EmpresaId')
+    empresa = models.ForeignKey('Empresa', on_delete=models.CASCADE, db_column='EmpresaId', null=True, blank=True)
     nombre = models.CharField(max_length=50, db_column='Nombre')
     descripcion = models.TextField(db_column='Descripcion', blank=True, null=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True, db_column='FechaCreacion')
@@ -49,8 +49,8 @@ class Rol(models.Model):
 
 class Usuario(models.Model):
     usuario_id = models.AutoField(primary_key=True, db_column='UsuarioId')
-    empresa = models.ForeignKey('Empresa', on_delete=models.CASCADE, db_column='EmpresaId')
-    sucursal = models.ForeignKey('Sucursal', on_delete=models.CASCADE, db_column='SucursalId')
+    empresa = models.ForeignKey('Empresa', on_delete=models.CASCADE, db_column='EmpresaId', null=True, blank=True)
+    sucursal = models.ForeignKey('Sucursal', on_delete=models.CASCADE, db_column='SucursalId', null=True, blank=True)
     rol = models.ForeignKey('Rol', on_delete=models.CASCADE, db_column='RolId')
     nombre_completo = models.CharField(max_length=100, db_column='Nombre')
     email = models.EmailField(max_length=100, unique=True, db_column='Email')
@@ -104,6 +104,28 @@ class Modificador(models.Model):
     def __str__(self):
         return f'{self.nombre} - ({self.tipo})'
     
+class Producto(models.Model):
+    producto_id = models.AutoField(primary_key=True, db_column='ProductoId')
+    categoria = models.ForeignKey('Categoria', on_delete=models.SET_NULL, db_column='CategoriaId', null=True, blank=True)
+
+    nombre = models.CharField(max_length=100, db_column='Nombre')  # si quieres ceñirte al diagrama estricto usa 100 o 100? (en tu lista pusiste varchar_100)
+    descripcion = models.CharField(max_length=200, db_column='Descripcion', blank=True, null=True)
+
+    precio_base = models.DecimalField(max_digits=10, decimal_places=2, db_column='PrecioBase')
+    tiempo_preparacion = models.IntegerField(db_column='TiempoPreparacion')  # minutos
+
+    estado = models.BooleanField(default=True, db_column='Estado')
+    fecha_creacion = models.DateTimeField(auto_now_add=True, db_column='FechaCreacion')
+
+    class Meta:
+        db_table = 'PRODUCTOS'
+        verbose_name = 'Producto'
+        verbose_name_plural = 'Productos'
+        ordering = ['-fecha_creacion']
+
+    def __str__(self):
+        return f'{self.nombre} - {self.categoria.nombre}'
+
 
 class ProductoModificador(models.Model):
     producto = models.ForeignKey('Producto', on_delete=models.CASCADE, db_column='ProductoId')
