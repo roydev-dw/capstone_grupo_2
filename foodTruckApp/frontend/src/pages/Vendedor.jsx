@@ -1,22 +1,48 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { db } from '../utils/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { OpcionesModal } from '../components/vendedor/ModalOpciones';
-import { apiProductos } from '../utils/api';
+import { apiFoodTrucks } from '../utils/api';
 import { Header } from '../components/vendedor/Header';
 import { FiltroCategoria } from '../components/vendedor/FiltroCategoria';
 import { TarjetaProducto } from '../components/vendedor/TarjetaProducto';
 import { PedidoActual } from '../components/vendedor/PedidoActual';
 import { BotonTarjeta } from '../components/vendedor/BotonTarjeta';
 
+// --- helper para normalizar respuestas {results:[]}, {data:{results:[]}}, [] ---
+const pickList = (res) =>
+  Array.isArray(res?.results)
+    ? res.results
+    : Array.isArray(res?.data?.results)
+    ? res.data.results
+    : Array.isArray(res)
+    ? res
+    : [];
+
 export const Vendedor = () => {
   const [loading, setLoading] = useState(true);
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [isMobileAbrirCarrito, setIsMobileAbrirCarrito] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
+  const [fetchError, setFetchError] = useState('');
 
   const carrito = useLiveQuery(() => db.carrito.toArray(), []) || [];
-  const productos = useLiveQuery(() => db.productos.toArray(), []) || [];
+  const productosDB = useLiveQuery(() => db.productos_v2.toArray(), []) || [];
+
+  const productosUI = useMemo(() => {
+    return (
+      (productosDB || [])
+        // acepta boolean true o string 'Publicado'
+        .filter((p) => p.estado === true || p.estado === 'Publicado')
+        .map((p) => ({
+          id: p.producto_id,
+          name: p.nombre,
+          price: Number(p.precio_base || 0),
+          image: p.image || null,
+          category: p.categoria_nombre || '',
+        }))
+    );
+  }, [productosDB]);
 
   const generarIdItemCarrito = useCallback((producto) => {
     const base = String(producto.id);
@@ -40,74 +66,60 @@ export const Vendedor = () => {
   }, []);
 
   useEffect(() => {
-    let once = false;
-
     const syncProductos = async () => {
-      if (import.meta.env.DEV && once) return;
-      once = true;
-
-      const productosEnDB = await db.productos.count();
-      if (productosEnDB === 0) {
-        setLoading(true);
-      } else {
-        setLoading(false);
-      }
-
       try {
-        const data = await apiProductos.get('api-fast-food');
+        setFetchError('');
 
-        const productosNormalizados = data.map((producto) => {
-          const p = {
-            id: producto.id,
-            name: producto.name,
-            price: producto.price,
-            image: producto.image,
-            category: producto.category,
-          };
-          if (producto.category === 'cafe') {
-            p.options = [
-              {
-                name: 'Café',
-                choices: [
-                  { name: 'Cafeinado', extraPrice: 0 },
-                  { name: 'Descafeinado', extraPrice: 200 },
-                ],
-              },
-              {
-                name: 'Leche',
-                choices: [
-                  { name: 'Entera', extraPrice: 0 },
-                  { name: 'Descremada', extraPrice: 0 },
-                  { name: 'Semidescremada', extraPrice: 0 },
-                  { name: 'Sin Lactosa', extraPrice: 300 },
-                  { name: 'Vegetal', extraPrice: 500 },
-                ],
-              },
-            ];
-          }
-          return p;
-        });
-
-        await db.transaction('rw', db.productos, async () => {
-          const existentes = await db.productos.toCollection().primaryKeys();
-          const mapaNuevos = new Map(
-            productosNormalizados.map((p) => [String(p.id), p])
+        const accessToken = localStorage.getItem('accessToken');
+        if (!accessToken) {
+          console.warn(
+            '[Vendedor] No se encontró accessToken. No se sincronizarán productos.'
           );
-
-          await db.productos.bulkPut(productosNormalizados);
-
-          const idsEliminar = existentes.filter(
-            (id) => !mapaNuevos.has(String(id))
+          setLoading(false);
+          setFetchError(
+            'No se encontró una sesión activa. Inicia sesión nuevamente.'
           );
-          if (idsEliminar.length) {
-            await db.productos.bulkDelete(idsEliminar);
+          return;
+        }
+
+        const countPrev = await db.productos_v2.count();
+        setLoading(countPrev === 0);
+
+        const res = await apiFoodTrucks.get('v1/productos/');
+        const list = pickList(res); // <-- normalización robusta
+
+        const normalizados = list.map((r) => ({
+          producto_id: String(r.producto_id),
+          categoria_id: String(r.categoria_id ?? 'sin-categoria'),
+          categoria_nombre: r.categoria_nombre ?? 'Sin categoría',
+          nombre: r.nombre,
+          descripcion: r.descripcion ?? '',
+          precio_base: Number(r.precio_base || 0),
+          tiempo_preparacion: Number(r.tiempo_preparacion || 0),
+          // guardamos como string para UI; el filtro ya acepta boolean o string
+          estado: r.estado === true ? 'Publicado' : 'Borrador',
+          fecha_creacion: r.fecha_creacion || new Date().toISOString(),
+          image: null,
+        }));
+
+        await db.transaction('rw', db.productos_v2, db.categorias, async () => {
+          await db.productos_v2.bulkPut(normalizados);
+
+          const categoriasDerivadas = [
+            ...new Map(
+              normalizados.map((p) => [
+                p.categoria_id,
+                { categoria_id: p.categoria_id, nombre: p.categoria_nombre },
+              ])
+            ).values(),
+          ];
+          if (categoriasDerivadas.length) {
+            await db.categorias.bulkPut(categoriasDerivadas);
           }
         });
       } catch (error) {
-        console.warn(
-          'Error al sincronizar con la API (probablemente offline):',
-          error?.message
-        );
+        console.error('[Vendedor] Error al sincronizar:', error);
+        setFetchError(error?.message || 'No se pudieron cargar productos.');
       } finally {
         setLoading(false);
       }
@@ -253,19 +265,40 @@ export const Vendedor = () => {
       <div className="lg:flex min-h-screen">
         <div className="flex flex-col min-h-screen flex-1 overflow-y-auto">
           <Header />
+
+          {fetchError && (
+            <div className="mx-6 mt-24 lg:mt-6 bg-red-100 text-red-700 border border-red-300 rounded-lg px-4 py-3">
+              <p className="font-semibold">No se pudieron cargar productos</p>
+              <p className="text-sm">{fetchError}</p>
+            </div>
+          )}
+
           <main className="flex-1 px-6 pb-6 pt-40 lg:p-12">
             <FiltroCategoria />
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 grid-cols-extra gap-8 mt-8">
-              {productos.map((p) => (
-                <div
-                  key={p.id}
-                  className="cursor-pointer"
-                  onClick={() => handleProductClick(p)}
-                >
-                  <TarjetaProducto product={p} />
-                </div>
-              ))}
-            </div>
+
+            {productosUI.length === 0 ? (
+              <div className="mt-8 p-6 bg-white rounded-xl border text-gray-600">
+                <p className="font-semibold">No hay productos para mostrar.</p>
+                <p className="text-sm mt-1">
+                  Verifica que tu endpoint <code>/v1/productos/</code> esté
+                  devolviendo productos con
+                  <code className="mx-1">estado: true</code> (se muestran como{' '}
+                  <em>Publicado</em>).
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 grid-cols-extra gap-8 mt-8">
+                {productosUI.map((p) => (
+                  <div
+                    key={p.id}
+                    className="cursor-pointer"
+                    onClick={() => handleProductClick(p)}
+                  >
+                    <TarjetaProducto product={p} />
+                  </div>
+                ))}
+              </div>
+            )}
 
             {isModalOpen && (
               <OpcionesModal
