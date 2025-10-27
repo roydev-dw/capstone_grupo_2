@@ -39,7 +39,7 @@ const mapCategoriaToApi = (form) => {
   return body;
 };
 
-// >>> NUEVO: comparador por ID numérico ascendente
+// Comparador por ID numérico ascendente
 const byIdAsc = (a, b) => {
   const ai = Number(a.categoria_id);
   const bi = Number(b.categoria_id);
@@ -60,11 +60,11 @@ export const categoriasRepo = {
         await db.categorias.bulkPut(items);
       });
 
-      const ordenadas = items.sort(byIdAsc); // ← ahora ordena por ID
+      const ordenadas = items.sort(byIdAsc);
       return { items: ordenadas, source: 'network' };
     } catch (err) {
       console.warn('[repoCategorias] listAll() desde cache:', err?.message);
-      const cached = (await db.categorias.toArray()).sort(byIdAsc); // ← idem cache
+      const cached = (await db.categorias.toArray()).sort(byIdAsc);
       return { items: cached, source: 'cache' };
     }
   },
@@ -179,18 +179,27 @@ export const categoriasRepo = {
     }
   },
 
-  /** Eliminar definitiva (DELETE hard). */
+  /** Eliminar (DELETE hard) – optimista con reversión. */
+  /** Eliminar definitiva (DELETE hard) */
   async destroy(categoria_id) {
     const id = String(categoria_id);
     const before = await db.categorias.get(id);
-    if (before) await db.categorias.delete(id);
+    if (before) await db.categorias.delete(id); // optimismo
 
     try {
-      await apiFoodTrucks.delete(`${ENDPOINT_BASE}${id}/`, {
-        params: { hard: 1 },
-      });
+      // 🔍 Mostrar en consola la URL completa antes de ejecutar la petición
+      const url = `${ENDPOINT_BASE}${id}/?hard=1`;
+      console.log('[categoriasRepo.destroy] URL completa:', url);
+
+      // Llamada real
+      await apiFoodTrucks.delete(url);
+
+      // Si todo sale bien, no hacemos nada más (listAll refresca)
+      return;
     } catch (e) {
+      // Si falla, revertimos el cache y propagamos el error
       if (before) await db.categorias.put(before);
+      console.error('[categoriasRepo.destroy] Error al eliminar:', e);
       throw e;
     }
   },

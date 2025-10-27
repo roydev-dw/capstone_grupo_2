@@ -1,7 +1,7 @@
-// components/sesion_usuario/UserMenu.jsx
 import { useNavigate } from 'react-router-dom';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { clearSession } from '../../utils/session';
+import { Button } from '../ui/Button';
 
 export const UserMenu = ({ user: userProp, onLogout }) => {
   const { user: hookUser } = useCurrentUser();
@@ -21,20 +21,18 @@ export const UserMenu = ({ user: userProp, onLogout }) => {
 
   return (
     <div className="w-full flex justify-end items-cente">
-      <div className="flex flex-col shadow-md rounded-md px-4 mr-4">
-        <span className="text-sm font-semibold">{displayName}</span>
-        {displayRole && (
-          <span className="text-xs text-placeholder">{displayRole}</span>
-        )}
+      <div className="flex flex-col items-center justify-center mr-6">
+        <span className="text-md font-semibold text-primario">
+          {displayRole}
+        </span>
+        <span className="text-md font-semibold text-secundario">
+          {displayName}
+        </span>
       </div>
-      <div>
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="px-4 py-2 text-xs font-semibold text-white bg-primario rounded-md shadow hover:bg-[#aa7e3f] transition"
-        >
+      <div className="flex items-center justify-center">
+        <Button color="secundario" onClick={handleLogout}>
           Cerrar sesión
-        </button>
+        </Button>
       </div>
     </div>
   );

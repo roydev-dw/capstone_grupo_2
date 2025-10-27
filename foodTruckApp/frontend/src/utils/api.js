@@ -1,3 +1,4 @@
+// utils/api.js
 const BASE = import.meta.env.VITE_API_BASE_URL_FOODTRUCKS;
 
 const getTokens = () => ({
@@ -22,8 +23,12 @@ const isAuthFree = (endpoint) =>
 
 const rawRequest = async (endpoint, { method = 'GET', body, headers } = {}) => {
   const url = `${BASE}${endpoint}`;
+
+  const isFormData =
+    typeof FormData !== 'undefined' && body instanceof FormData;
+
   const h = {
-    ...(body ? { 'Content-Type': 'application/json' } : {}),
+    ...(body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(headers || {}),
   };
 
@@ -33,10 +38,13 @@ const rawRequest = async (endpoint, { method = 'GET', body, headers } = {}) => {
     h.Authorization = `Bearer ${access}`;
   }
 
+  // (Opcional de debug) ver URL final:
+  // console.log(`[apiFoodTrucks] ${method} ${url}`);
+
   const res = await fetch(url, {
     method,
     headers: h,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
   });
 
   if (res.status === 204) return null;

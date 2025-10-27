@@ -8,6 +8,8 @@
   --color-elemento: #ffffff; /* Blanco puro (tarjetas, contenedores) */
   --color-primario: #c1904d; /* Caramelo cálido */
   --color-secundario: #7b8c5b; /* Verde oliva complementario */
+  --color-info: #4b6584; /* Azul grisáceo elegante (para Editar) */
+  --color-peligro: #a45c5c; /* Rojo terracota (para Eliminar/Cancelar) */
   --color-texto: #333333; /* Gris oscuro para texto */
   --color-placeholder: #bcbcbc; /* Gris claro para inputs y detalles */
 }
