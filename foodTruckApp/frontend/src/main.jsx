@@ -13,6 +13,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Login } from './pages/Login';
 import { Vendedor } from './pages/Vendedor';
+import { Supervisor } from './pages/Supervisor';
 import { Administrador } from './pages/Administrador';
 
 import '@fontsource/luckiest-guy';
@@ -29,6 +30,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/vendedor" element={<Vendedor />} />
         <Route path="/admin" element={<Administrador />} />
         <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/supervisor" element={<Supervisor />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

@@ -1,80 +1,125 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { db } from '../utils/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { OpcionesModal } from '../components/vendedor/ModalOpciones';
-import { apiProductos } from '../utils/api';
+import { apiFoodTrucks } from '../utils/api';
 import { Header } from '../components/vendedor/Header';
 import { FiltroCategoria } from '../components/vendedor/FiltroCategoria';
 import { TarjetaProducto } from '../components/vendedor/TarjetaProducto';
 import { PedidoActual } from '../components/vendedor/PedidoActual';
 import { BotonTarjeta } from '../components/vendedor/BotonTarjeta';
 
+// --- helper para normalizar respuestas {results:[]}, {data:{results:[]}}, [] ---
+const pickList = (res) =>
+  Array.isArray(res?.results)
+    ? res.results
+    : Array.isArray(res?.data?.results)
+    ? res.data.results
+    : Array.isArray(res)
+    ? res
+    : [];
+
 export const Vendedor = () => {
   const [loading, setLoading] = useState(true);
-  const carrito = useLiveQuery(() => db.carrito.toArray(), []) || [];
-  const productos = useLiveQuery(() => db.productos.toArray(), []) || [];
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [isMobileAbrirCarrito, setIsMobileAbrirCarrito] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
+  const [fetchError, setFetchError] = useState('');
+
+  const carrito = useLiveQuery(() => db.carrito.toArray(), []) || [];
+  const productosDB = useLiveQuery(() => db.productos_v2.toArray(), []) || [];
+
+  const productosUI = useMemo(() => {
+    return (
+      (productosDB || [])
+        // acepta boolean true o string 'Publicado'
+        .filter((p) => p.estado === true || p.estado === 'Publicado')
+        .map((p) => ({
+          id: p.producto_id,
+          name: p.nombre,
+          price: Number(p.precio_base || 0),
+          image: p.image || null,
+          category: p.categoria_nombre || '',
+        }))
+    );
+  }, [productosDB]);
+
+  const generarIdItemCarrito = useCallback((producto) => {
+    const base = String(producto.id);
+    if (!producto.selectedOptions) return base;
+
+    const partes = Object.entries(producto.selectedOptions)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([grupo, opt]) => `${grupo}:${opt.name}`);
+
+    return `${base}::${partes.join('|')}`;
+  }, []);
+
+  const calcularPrecioFinalUnitario = useCallback((producto) => {
+    const extras = producto.selectedOptions
+      ? Object.values(producto.selectedOptions).reduce(
+          (t, o) => t + (o.extraPrice || 0),
+          0
+        )
+      : 0;
+    return (producto.price || 0) + extras;
+  }, []);
 
   useEffect(() => {
     const syncProductos = async () => {
-      const productosEnDB = await db.productos.count();
-      if (productosEnDB === 0) {
-        console.log('Base de datos vacía, se mostrará "Cargando..."');
-        setLoading(true);
-      } else {
-        console.log('Mostrando productos desde caché (stale)...');
-        setLoading(false);
-      }
-
       try {
-        console.log('Intentando sincronizar con la API (revalidate)...');
-        const data = await apiProductos.get('api-fast-food');
+        setFetchError('');
 
-        const productosNormalizados = data.map((producto) => {
-          const p = {
-            id: producto.id,
-            name: producto.name,
-            price: producto.price,
-            image: producto.image,
-            category: producto.category,
-          };
-          if (producto.category === 'cafe') {
-            p.options = [
-              {
-                name: 'Café',
-                choices: [
-                  { name: 'Cafeinado', extraPrice: 0 },
-                  { name: 'Descafeinado', extraPrice: 200 },
-                ],
-              },
-              {
-                name: 'Leche',
-                choices: [
-                  { name: 'Entera', extraPrice: 0 },
-                  { name: 'Descremada', extraPrice: 0 },
-                  { name: 'Semidescremada', extraPrice: 0 },
-                  { name: 'Sin Lactosa', extraPrice: 300 },
-                  { name: 'Vegetal', extraPrice: 500 },
-                ],
-              },
-            ];
+        const accessToken = localStorage.getItem('accessToken');
+        if (!accessToken) {
+          console.warn(
+            '[Vendedor] No se encontró accessToken. No se sincronizarán productos.'
+          );
+          setLoading(false);
+          setFetchError(
+            'No se encontró una sesión activa. Inicia sesión nuevamente.'
+          );
+          return;
+        }
+
+        const countPrev = await db.productos_v2.count();
+        setLoading(countPrev === 0);
+
+        const res = await apiFoodTrucks.get('v1/productos/');
+        const list = pickList(res); // <-- normalización robusta
+
+        const normalizados = list.map((r) => ({
+          producto_id: String(r.producto_id),
+          categoria_id: String(r.categoria_id ?? 'sin-categoria'),
+          categoria_nombre: r.categoria_nombre ?? 'Sin categoría',
+          nombre: r.nombre,
+          descripcion: r.descripcion ?? '',
+          precio_base: Number(r.precio_base || 0),
+          tiempo_preparacion: Number(r.tiempo_preparacion || 0),
+          // guardamos como string para UI; el filtro ya acepta boolean o string
+          estado: r.estado === true ? 'Publicado' : 'Borrador',
+          fecha_creacion: r.fecha_creacion || new Date().toISOString(),
+          image: null,
+        }));
+
+        await db.transaction('rw', db.productos_v2, db.categorias, async () => {
+          await db.productos_v2.bulkPut(normalizados);
+
+          const categoriasDerivadas = [
+            ...new Map(
+              normalizados.map((p) => [
+                p.categoria_id,
+                { categoria_id: p.categoria_id, nombre: p.categoria_nombre },
+              ])
+            ).values(),
+          ];
+          if (categoriasDerivadas.length) {
+            await db.categorias.bulkPut(categoriasDerivadas);
           }
-          return p;
         });
-
-        await db.transaction('rw', db.productos, async () => {
-          await db.productos.clear();
-          await db.productos.bulkAdd(productosNormalizados);
-        });
-
-        console.log('Caché de productos actualizada (revalidated).');
       } catch (error) {
-        console.warn(
-          'Error al sincronizar con la API (probablemente offline):',
-          error.message
-        );
+        console.error('[Vendedor] Error al sincronizar:', error);
+        setFetchError(error?.message || 'No se pudieron cargar productos.');
       } finally {
         setLoading(false);
       }
@@ -82,114 +127,124 @@ export const Vendedor = () => {
 
     syncProductos();
   }, []);
-  const handleProductClick = (producto) => {
+
+  const handleProductClick = useCallback((producto) => {
     if (producto.options && producto.options.length > 0) {
       setProductoSeleccionado(producto);
     } else {
-      handleAddCarrito({ ...producto, precioFinalUnitario: producto.price });
+      handleAddCarrito({ ...producto, quantity: 1 });
     }
-  };
+  }, []);
 
-  const handleEditarItem = (idItemCarrito) => {
-    const item = carrito.find((i) => i.idItemCarrito === idItemCarrito);
-    if (item) {
-      setItemParaEditar(item);
-    }
-  };
+  const handleEditarItem = useCallback(
+    (idItemCarrito) => {
+      const item = carrito.find((i) => i.idItemCarrito === idItemCarrito);
+      if (item) setItemParaEditar(item);
+    },
+    [carrito]
+  );
 
-  const generarIdItemCarrito = (producto) => {
-    if (!producto.selectedOptions) {
-      return producto.id;
-    }
-    const optionsString = Object.values(producto.selectedOptions)
-      .map((option) => option.name)
-      .join('-');
-    return `${producto.id}-${optionsString}`;
-  };
+  const handleAddCarrito = useCallback(
+    async (productoAgregado) => {
+      const idItemCarrito = generarIdItemCarrito(productoAgregado);
+      const precioFinalUnitario = calcularPrecioFinalUnitario(productoAgregado);
+      const cantidad = productoAgregado.quantity || 1;
 
-  const handleAddCarrito = async (productoAgregado) => {
-    const idItemCarrito = generarIdItemCarrito(productoAgregado);
-
-    let precioFinalUnitario = productoAgregado.price;
-    if (productoAgregado.selectedOptions) {
-      const precioOpciones = Object.values(
-        productoAgregado.selectedOptions
-      ).reduce((total, option) => total + option.extraPrice, 0);
-      precioFinalUnitario += precioOpciones;
-    }
-
-    const productoExistente = await db.carrito.get(idItemCarrito);
-
-    if (productoExistente) {
-      await db.carrito.update(idItemCarrito, {
-        quantity: productoExistente.quantity + (productoAgregado.quantity || 1),
+      await db.transaction('rw', db.carrito, async () => {
+        const existente = await db.carrito.get(idItemCarrito);
+        if (existente) {
+          await db.carrito.update(idItemCarrito, {
+            quantity: existente.quantity + cantidad,
+          });
+        } else {
+          const { id, name, price, selectedOptions } = productoAgregado;
+          await db.carrito.add({
+            idItemCarrito,
+            id,
+            name,
+            price,
+            selectedOptions: selectedOptions || null,
+            quantity: cantidad,
+            precioFinalUnitario,
+          });
+        }
       });
-    } else {
-      await db.carrito.add({
-        ...productoAgregado,
-        idItemCarrito,
-        quantity: productoAgregado.quantity || 1,
-        precioFinalUnitario,
+
+      setProductoSeleccionado(null);
+    },
+    [calcularPrecioFinalUnitario, generarIdItemCarrito]
+  );
+
+  const handleActualizarItemEnCarrito = useCallback(
+    async (itemActualizado) => {
+      const idItemAntiguo = itemParaEditar.idItemCarrito;
+      const cantidadAntigua = itemParaEditar.quantity;
+
+      const idItemNuevo = generarIdItemCarrito(itemActualizado);
+      const precioFinalUnitario = calcularPrecioFinalUnitario(itemActualizado);
+
+      await db.transaction('rw', db.carrito, async () => {
+        await db.carrito.delete(idItemAntiguo);
+        const existenteNuevo = await db.carrito.get(idItemNuevo);
+        if (existenteNuevo) {
+          await db.carrito.update(idItemNuevo, {
+            quantity: existenteNuevo.quantity + cantidadAntigua,
+          });
+        } else {
+          const { id, name, price, selectedOptions } = itemActualizado;
+          await db.carrito.add({
+            idItemCarrito: idItemNuevo,
+            id,
+            name,
+            price,
+            selectedOptions: selectedOptions || null,
+            quantity: cantidadAntigua,
+            precioFinalUnitario,
+          });
+        }
       });
-    }
 
-    setProductoSeleccionado(null);
-  };
+      setItemParaEditar(null);
+    },
+    [itemParaEditar, calcularPrecioFinalUnitario, generarIdItemCarrito]
+  );
 
-  const handleActualizarItemEnCarrito = async (itemActualizado) => {
-    const idItemAntiguo = itemParaEditar.idItemCarrito;
-    const cantidadAntigua = itemParaEditar.quantity;
-
-    const idItemNuevo = generarIdItemCarrito(itemActualizado);
-    let precioFinalUnitario = itemActualizado.price;
-    if (itemActualizado.selectedOptions) {
-      const precioOpciones = Object.values(
-        itemActualizado.selectedOptions
-      ).reduce((total, option) => total + option.extraPrice, 0);
-      precioFinalUnitario += precioOpciones;
-    }
-
+  const handleRemoveCarrito = useCallback(async (idItemCarrito) => {
     await db.transaction('rw', db.carrito, async () => {
-      await db.carrito.delete(idItemAntiguo);
-      const itemExistenteConNuevasOpciones = await db.carrito.get(idItemNuevo);
+      const existente = await db.carrito.get(idItemCarrito);
+      if (!existente) return;
 
-      if (itemExistenteConNuevasOpciones) {
-        await db.carrito.update(idItemNuevo, {
-          quantity: itemExistenteConNuevasOpciones.quantity + cantidadAntigua,
-        });
+      if (existente.quantity <= 1) {
+        await db.carrito.delete(idItemCarrito);
       } else {
-        await db.carrito.add({
-          ...itemActualizado,
-          idItemCarrito: idItemNuevo,
-          precioFinalUnitario: precioFinalUnitario,
-          quantity: cantidadAntigua,
+        await db.carrito.update(idItemCarrito, {
+          quantity: existente.quantity - 1,
         });
       }
     });
+  }, []);
 
-    setItemParaEditar(null);
-  };
-
-  const handleRemoveCarrito = async (idItemCarrito) => {
-    const productoExistente = await db.carrito.get(idItemCarrito);
-    if (!productoExistente) return;
-
-    if (productoExistente.quantity === 1) {
+  const handleEliminarItem = useCallback(async (idItemCarrito) => {
+    await db.transaction('rw', db.carrito, async () => {
       await db.carrito.delete(idItemCarrito);
-    } else {
-      await db.carrito.update(idItemCarrito, {
-        quantity: productoExistente.quantity - 1,
-      });
-    }
-  };
+    });
+  }, []);
 
-  const handleEliminarItem = async (idItemCarrito) => {
-    await db.carrito.delete(idItemCarrito);
-  };
+  const handleClearCarrito = useCallback(async () => {
+    await db.transaction('rw', db.carrito, async () => {
+      await db.carrito.clear();
+    });
+  }, []);
 
-  const handleClearCarrito = async () => {
-    await db.carrito.clear();
-  };
+  const onModalClose = useCallback(() => {
+    setProductoSeleccionado(null);
+    setItemParaEditar(null);
+  }, []);
+
+  const cartCount = useMemo(
+    () => carrito.reduce((sum, item) => sum + item.quantity, 0),
+    [carrito]
+  );
 
   if (loading) {
     return (
@@ -205,29 +260,45 @@ export const Vendedor = () => {
     ? handleActualizarItemEnCarrito
     : handleAddCarrito;
 
-  const onModalClose = () => {
-    setProductoSeleccionado(null);
-    setItemParaEditar(null);
-  };
-
   return (
     <div className="min-h-screen bg-elemento ">
       <div className="lg:flex min-h-screen">
         <div className="flex flex-col min-h-screen flex-1 overflow-y-auto">
           <Header />
+
+          {fetchError && (
+            <div className="mx-6 mt-24 lg:mt-6 bg-red-100 text-red-700 border border-red-300 rounded-lg px-4 py-3">
+              <p className="font-semibold">No se pudieron cargar productos</p>
+              <p className="text-sm">{fetchError}</p>
+            </div>
+          )}
+
           <main className="flex-1 px-6 pb-6 pt-40 lg:p-12">
             <FiltroCategoria />
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 grid-cols-extra gap-8 mt-8">
-              {productos.map((p) => (
-                <div
-                  key={p.id}
-                  className="cursor-pointer"
-                  onClick={() => handleProductClick(p)}
-                >
-                  <TarjetaProducto product={p} />
-                </div>
-              ))}
-            </div>
+
+            {productosUI.length === 0 ? (
+              <div className="mt-8 p-6 bg-white rounded-xl border text-gray-600">
+                <p className="font-semibold">No hay productos para mostrar.</p>
+                <p className="text-sm mt-1">
+                  Verifica que tu endpoint <code>/v1/productos/</code> esté
+                  devolviendo productos con
+                  <code className="mx-1">estado: true</code> (se muestran como{' '}
+                  <em>Publicado</em>).
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 grid-cols-extra gap-8 mt-8">
+                {productosUI.map((p) => (
+                  <div
+                    key={p.id}
+                    className="cursor-pointer"
+                    onClick={() => handleProductClick(p)}
+                  >
+                    <TarjetaProducto product={p} />
+                  </div>
+                ))}
+              </div>
+            )}
 
             {isModalOpen && (
               <OpcionesModal
@@ -238,9 +309,10 @@ export const Vendedor = () => {
               />
             )}
           </main>
+
           <div className="lg:hidden">
             <BotonTarjeta
-              cartCount={carrito.reduce((sum, item) => sum + item.quantity, 0)}
+              cartCount={cartCount}
               onClick={() => setIsMobileAbrirCarrito(true)}
             />
           </div>

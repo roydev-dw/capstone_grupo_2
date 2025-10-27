@@ -1,8 +1,9 @@
+import React, { useMemo } from 'react';
 import { HiXMark } from 'react-icons/hi2';
 import { FaEdit } from 'react-icons/fa';
 import { IoTrash } from 'react-icons/io5';
 
-export const PedidoActual = ({
+export const PedidoActual = React.memo(function PedidoActual({
   cart = [],
   onClearCart = () => {},
   onAgregarAlCarrito = () => {},
@@ -10,15 +11,15 @@ export const PedidoActual = ({
   onEditarItem = () => {},
   onEliminarItem = () => {},
   onClose,
-}) => {
-  const subtotal = cart.reduce(
-    (sum, item) => sum + item.precioFinalUnitario * item.quantity,
-    0
-  );
-
-  let IVA = 0.19;
-  const impuesto = subtotal * IVA;
-  const totalPagar = subtotal + impuesto;
+}) {
+  const { subtotal, impuesto, totalPagar } = useMemo(() => {
+    const sb = cart.reduce(
+      (sum, item) => sum + item.precioFinalUnitario * item.quantity,
+      0
+    );
+    const IVA = 0.19;
+    return { subtotal: sb, impuesto: sb * IVA, totalPagar: sb * (1 + IVA) };
+  }, [cart]);
 
   const formatCurrency = (value) =>
     new Intl.NumberFormat('es-CL', {
@@ -62,13 +63,14 @@ export const PedidoActual = ({
             {cart.map((item) => {
               const extrasTotal = item.selectedOptions
                 ? Object.values(item.selectedOptions).reduce(
-                    (sum, eleccion) => sum + eleccion.extraPrice,
+                    (sum, eleccion) => sum + (eleccion.extraPrice || 0),
                     0
                   )
                 : 0;
 
-              const basePrice = item.precioFinalUnitario - extrasTotal;
-              const itemSubtotal = item.precioFinalUnitario * item.quantity;
+              const basePrice = (item.precioFinalUnitario || 0) - extrasTotal;
+              const itemSubtotal =
+                (item.precioFinalUnitario || 0) * item.quantity;
 
               return (
                 <li
@@ -226,4 +228,4 @@ export const PedidoActual = ({
       </div>
     </aside>
   );
-};
+});
