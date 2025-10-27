@@ -233,13 +233,12 @@ export const PanelCategorias = ({
             type="submit"
             disabled={saving || !form.nombre.trim()}
             color="primario"
-            size="md"
           >
             {editId ? 'Guardar cambios' : 'Crear'}
           </Button>
 
           {editId && (
-            <Button type="button" onClick={resetForm} color="peligro" size="md">
+            <Button type="button" onClick={resetForm} color="peligro">
               Cancelar
             </Button>
           )}
@@ -297,7 +296,6 @@ export const PanelCategorias = ({
                   <Button
                     onClick={() => startEdit(c)}
                     disabled={!!busyId}
-                    size="md"
                     color="info"
                   >
                     Editar
@@ -310,7 +308,6 @@ export const PanelCategorias = ({
                         : habilitar(c.categoria_id)
                     }
                     disabled={busyId === c.categoria_id}
-                    size="md"
                     color="neutral"
                   >
                     {c.estado !== false ? 'Ocultar' : 'Mostrar'}
@@ -319,7 +316,6 @@ export const PanelCategorias = ({
                   <Button
                     onClick={() => eliminar(c.categoria_id)}
                     disabled={busyId === c.categoria_id}
-                    size="md"
                     color="peligro"
                   >
                     Eliminar

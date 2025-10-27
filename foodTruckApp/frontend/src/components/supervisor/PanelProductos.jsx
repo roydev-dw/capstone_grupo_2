@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { productosRepo } from '../../utils/repoProductos';
 import { toast } from 'react-hot-toast';
+import { Button } from '../ui/Button';
 
 export const PanelProductos = ({ categoriasActivas = [] }) => {
   const [productos, setProductos] = useState([]);
@@ -194,7 +195,7 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-xl font-semibold text-gray-900">Productos</h2>
 
-        <button
+        <Button
           type="button"
           onClick={() => setShowDisabledProd((v) => !v)}
           className="px-3 py-2 rounded-lg border text-sm hover:bg-gray-50"
@@ -202,7 +203,7 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
           {showDisabledProd
             ? 'Ocultar deshabilitados'
             : 'Mostrar deshabilitados'}
-        </button>
+        </Button>
       </div>
 
       {/* Formulario producto */}
