@@ -3,6 +3,7 @@ import { db } from './db';
 import { apiFoodTrucks } from './api';
 
 const ENDPOINT_BASE = 'v1/productos/';
+const productoImagenEndpoint = (id) => `v1/productos/${id}/imagen/`;
 
 // ---------- helpers de respuesta ----------
 const pickList = (res) =>
@@ -21,11 +22,9 @@ const normalizeEstado = (v) => {
   if (v === true || v === 1 || v === '1') return true;
   if (typeof v === 'string' && v.toLowerCase() === 'true') return true;
   if (v === 'Publicado') return true;
-
   if (v === false || v === 0 || v === '0') return false;
   if (typeof v === 'string' && v.toLowerCase() === 'false') return false;
   if (v === 'Borrador') return false;
-
   return !!v;
 };
 
@@ -36,7 +35,7 @@ const normalizeMoneyString = (val) => {
     .replace(',', '.');
   const n = Number(s);
   if (Number.isNaN(n)) return '';
-  return n.toFixed(2); // "2900.00"
+  return n.toFixed(2);
 };
 
 // ---------- mapeos API <-> local ----------
@@ -50,7 +49,7 @@ const mapProductFromApi = (p) => ({
   tiempo_preparacion: Number(p.tiempo_preparacion ?? 0),
   estado: normalizeEstado(p.estado),
   fecha_creacion: p.fecha_creacion ?? '',
-  imagen_url: p.imagen_url ?? '',
+  imagen_url: p.imagen_url ?? p.imagen ?? '',
 });
 
 const mapProductToApi = (form) => ({
@@ -60,8 +59,45 @@ const mapProductToApi = (form) => ({
   precio_base: normalizeMoneyString(form.precio_base),
   tiempo_preparacion: Number(form.tiempo_preparacion || 0),
   estado: normalizeEstado(form.estado),
-  imagen_url: (form.imagen_url ?? '').trim(), // por si haces PUT sin nueva imagen
+  imagen_url: (form.imagen_url ?? '').trim(),
 });
+
+// ---------- helper nuevo: buildUpdateJson ----------
+function buildUpdateJson(form) {
+  const body = {};
+
+  if (form.categoria_id != null && String(form.categoria_id).trim() !== '') {
+    body.categoria_id = Number(form.categoria_id);
+  }
+  if (form.nombre && String(form.nombre).trim() !== '') {
+    body.nombre = String(form.nombre).trim();
+  }
+  if (form.descripcion && String(form.descripcion).trim() !== '') {
+    body.descripcion = String(form.descripcion).trim();
+  }
+
+  const precio = normalizeMoneyString(form.precio_base);
+  if (precio) {
+    body.precio_base = precio;
+  }
+
+  if (
+    form.tiempo_preparacion != null &&
+    String(form.tiempo_preparacion).trim() !== ''
+  ) {
+    body.tiempo_preparacion = Number(form.tiempo_preparacion);
+  }
+
+  if ('estado' in form) {
+    body.estado = normalizeEstado(form.estado);
+  }
+
+  if (form.imagen_url && String(form.imagen_url).trim() !== '') {
+    body.imagen_url = String(form.imagen_url).trim();
+  }
+
+  return body;
+}
 
 // ---------- outbox infra ----------
 const online = () =>
@@ -75,34 +111,13 @@ async function processOutboxItem(item) {
   try {
     switch (item.method) {
       case 'POST': {
-        // NOTA: dejamos de usar POST via outbox porque podría requerir FormData.
-        // Si llega algo aquí como POST JSON, lo intentamos igual:
         const createdRes = await apiFoodTrucks.post(item.endpoint, item.body);
         const obj = pickObject(createdRes);
-
-        if (!obj || obj.producto_id == null) {
-          console.warn(
-            '[repoProductos] POST sin cuerpo; se espera próximo GET.'
-          );
-          break;
-        }
-
+        if (!obj || obj.producto_id == null) break;
         const prod = mapProductFromApi(obj);
-
-        if (item.localTempId) {
-          const old = await db.productos_v2.get(item.localTempId);
-          if (old) {
-            await db.productos_v2.delete(item.localTempId);
-            await db.productos_v2.put({ ...old, ...prod });
-          } else {
-            await db.productos_v2.put(prod);
-          }
-        } else {
-          await db.productos_v2.put(prod);
-        }
+        await db.productos_v2.put(prod);
         break;
       }
-
       case 'PUT': {
         const updatedRes = await apiFoodTrucks.put(item.endpoint, item.body);
         const endpointId = String(
@@ -115,7 +130,6 @@ async function processOutboxItem(item) {
         await db.productos_v2.put(updated);
         break;
       }
-
       case 'PATCH': {
         const patchedRes = await apiFoodTrucks.patch(item.endpoint, item.body);
         const endpointId = String(
@@ -129,12 +143,10 @@ async function processOutboxItem(item) {
         await db.productos_v2.put(merged);
         break;
       }
-
       case 'DELETE': {
         await apiFoodTrucks.delete(item.endpoint);
         break;
       }
-
       default:
         throw new Error(`Método no soportado: ${item.method}`);
     }
@@ -158,10 +170,25 @@ async function flushOutbox() {
   for (const it of pending) {
     try {
       await processOutboxItem(it);
-    } catch {
-      // queda marcado en error
-    }
+    } catch {}
   }
+}
+
+// ---------- actualizar imagen (usa POST) ----------
+async function uploadImagenProducto(productoId, file) {
+  if (!file) return '';
+  const fd = new FormData();
+  const filename =
+    typeof file === 'object' && 'name' in file ? file.name : 'upload.jpg';
+  fd.append('imagen', file, filename);
+
+  const resp = await apiFoodTrucks.post(productoImagenEndpoint(productoId), fd);
+  const obj = pickObject(resp);
+  const imagen_url =
+    obj?.imagen_url ?? obj?.producto?.imagen_url ?? obj?.data?.imagen_url ?? '';
+  if (!imagen_url)
+    throw new Error('El endpoint de imagen no retornó imagen_url');
+  return imagen_url;
 }
 
 // ---------- API principal ----------
@@ -170,19 +197,14 @@ export const productosRepo = {
     try {
       const res = await apiFoodTrucks.get(ENDPOINT_BASE);
       const items = pickList(res).map(mapProductFromApi);
-
       await db.transaction('rw', db.productos_v2, async () => {
         await db.productos_v2.clear();
         await db.productos_v2.bulkPut(items);
       });
-
       if (online()) flushOutbox().catch(() => {});
       return { items, source: 'network' };
     } catch (err) {
-      console.warn(
-        '[repoProductos] list() desde cache por error:',
-        err?.message
-      );
+      console.warn('[repoProductos] list() desde cache:', err?.message);
       const cached = await db.productos_v2.toArray();
       cached.sort((a, b) =>
         (b.fecha_creacion || '').localeCompare(a.fecha_creacion || '')
@@ -191,30 +213,7 @@ export const productosRepo = {
     }
   },
 
-  /** Crear producto – usa SIEMPRE FormData (el backend lo exige) */
   async create(form) {
-    // Armamos FormData con todos los campos
-    const fd = new FormData();
-    if (form.categoria_id != null)
-      fd.append('categoria_id', String(form.categoria_id));
-    if (form.nombre) fd.append('nombre', String(form.nombre).trim());
-    if (form.descripcion)
-      fd.append('descripcion', String(form.descripcion).trim());
-    if (form.precio_base != null)
-      fd.append('precio_base', normalizeMoneyString(form.precio_base));
-    if (form.tiempo_preparacion != null)
-      fd.append(
-        'tiempo_preparacion',
-        String(Number(form.tiempo_preparacion || 0))
-      );
-    if ('estado' in form)
-      fd.append('estado', normalizeEstado(form.estado) ? '1' : '0');
-    // imagen si viene seleccionada:
-    if (form.imagen_file instanceof File) {
-      fd.append('imagen', form.imagen_file);
-    }
-
-    // Optimismo local simple (sin outbox para multipart)
     const tempId = `tmp-${Date.now()}`;
     await db.productos_v2.put({
       producto_id: tempId,
@@ -230,14 +229,26 @@ export const productosRepo = {
     });
 
     try {
-      const createdRes = await apiFoodTrucks.post(ENDPOINT_BASE, fd);
+      const body = buildUpdateJson(form);
+      const createdRes = await apiFoodTrucks.post(ENDPOINT_BASE, body);
       const obj = pickObject(createdRes);
       if (!obj || obj.producto_id == null) {
-        // si el server no devuelve el objeto, forzamos refresh
         await this.syncPending();
         return;
       }
-      const prod = mapProductFromApi(obj);
+      let prod = mapProductFromApi(obj);
+
+      if (form.imagen_file) {
+        try {
+          const imagen_url = await uploadImagenProducto(
+            prod.producto_id,
+            form.imagen_file
+          );
+          prod = { ...prod, imagen_url: imagen_url || prod.imagen_url || '' };
+        } catch (err) {
+          console.warn('[productosRepo.create] Falló upload de imagen:', err);
+        }
+      }
 
       await db.transaction('rw', db.productos_v2, async () => {
         await db.productos_v2.delete(tempId);
@@ -245,58 +256,48 @@ export const productosRepo = {
       });
       return prod;
     } catch (e) {
-      // revertir optimismo si falla
       await db.productos_v2.delete(tempId);
       throw e;
     }
   },
 
-  /** Actualizar – si trae imagen_file usa FormData, si no, va por outbox JSON */
   async update(producto_id, form) {
     const id = String(producto_id);
-    const hasNewImage = form?.imagen_file instanceof File;
+    const hasNewImage = !!form?.imagen_file;
 
     if (hasNewImage) {
-      const fd = new FormData();
-      if (form.categoria_id != null)
-        fd.append('categoria_id', String(form.categoria_id));
-      if (form.nombre) fd.append('nombre', String(form.nombre).trim());
-      if (form.descripcion)
-        fd.append('descripcion', String(form.descripcion).trim());
-      if (form.precio_base != null)
-        fd.append('precio_base', normalizeMoneyString(form.precio_base));
-      if (form.tiempo_preparacion != null)
-        fd.append(
-          'tiempo_preparacion',
-          String(Number(form.tiempo_preparacion || 0))
-        );
-      if ('estado' in form)
-        fd.append('estado', normalizeEstado(form.estado) ? '1' : '0');
-      fd.append('imagen', form.imagen_file);
-
+      const imagen_url = await uploadImagenProducto(id, form.imagen_file);
       const prev = await db.productos_v2.get(id);
-      await db.productos_v2.put({
+      const nextLocal = {
         ...prev,
         ...form,
         producto_id: id,
+        imagen_url,
         precio_base: Number(form.precio_base ?? prev?.precio_base ?? 0),
         tiempo_preparacion: Number(
           form.tiempo_preparacion ?? prev?.tiempo_preparacion ?? 0
         ),
         estado: normalizeEstado(form.estado),
-      });
+      };
+      await db.productos_v2.put(nextLocal);
 
-      const updatedRes = await apiFoodTrucks.put(`${ENDPOINT_BASE}${id}/`, fd);
-      const obj = pickObject(updatedRes);
-      const updated = mapProductFromApi(obj || { ...form, producto_id: id });
-      await db.productos_v2.put(updated);
-      return updated;
+      const body = buildUpdateJson({ ...form, imagen_url });
+      const hasOtherFields = Object.keys(body).length > 0;
+      if (hasOtherFields) {
+        const updatedRes = await apiFoodTrucks.put(
+          `${ENDPOINT_BASE}${id}/`,
+          body
+        );
+        const obj = pickObject(updatedRes);
+        const updated = mapProductFromApi(obj || { ...body, producto_id: id });
+        await db.productos_v2.put(updated);
+        return updated;
+      }
+      return nextLocal;
     }
 
-    // Sin nueva imagen: mantenemos tu flujo (optimista + outbox JSON)
     const desiredEstado = normalizeEstado(form.estado);
     const prev = await db.productos_v2.get(id);
-
     await db.productos_v2.put({
       ...prev,
       ...form,
@@ -330,18 +331,15 @@ export const productosRepo = {
     }
   },
 
-  /** Patch de solo estado (optimista + outbox). */
   async patchEstado(producto_id, estado) {
     const val = normalizeEstado(estado);
     const p = await db.productos_v2.get(producto_id);
     if (p) await db.productos_v2.put({ ...p, estado: val });
-
     await pushOutboxItem({
       method: 'PATCH',
       endpoint: `${ENDPOINT_BASE}${producto_id}/`,
       body: { estado: val },
     });
-
     if (online()) {
       await flushOutbox();
       try {
@@ -350,15 +348,12 @@ export const productosRepo = {
     }
   },
 
-  /** Eliminar (soft) con outbox */
   async remove(producto_id) {
     await db.productos_v2.delete(producto_id);
-
     await pushOutboxItem({
       method: 'DELETE',
       endpoint: `${ENDPOINT_BASE}${producto_id}/`,
     });
-
     if (online()) {
       await flushOutbox();
       try {
@@ -367,15 +362,12 @@ export const productosRepo = {
     }
   },
 
-  /** Eliminar definitiva (hard) inmediata */
   async destroy(producto_id) {
     const id = String(producto_id);
     const before = await db.productos_v2.get(id);
     if (before) await db.productos_v2.delete(id);
-
     try {
       const url = `${ENDPOINT_BASE}${id}/?hard=1`;
-      console.log('[repoProductos.destroy] URL completa:', url);
       await apiFoodTrucks.delete(url);
       return;
     } catch (e) {
@@ -384,7 +376,6 @@ export const productosRepo = {
     }
   },
 
-  /** Sincronización al volver online. */
   async syncPending() {
     if (!online()) return;
     await flushOutbox();
