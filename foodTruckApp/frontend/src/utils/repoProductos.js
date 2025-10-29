@@ -1,6 +1,7 @@
 // utils/repoProductos.js
 import { db } from './db';
 import { apiFoodTrucks } from './api';
+import Resizer from 'react-image-file-resizer'; // 👈 convierte a WebP
 
 const ENDPOINT_BASE = 'v1/productos/';
 const productoImagenEndpoint = (id) => `v1/productos/${id}/imagen/`;
@@ -99,6 +100,45 @@ function buildUpdateJson(form) {
   return body;
 }
 
+// ---------- compresión y conversión a WebP ----------
+function fileFromDataUrl(
+  dataUrl,
+  filename = 'image.webp',
+  type = 'image/webp'
+) {
+  const arr = dataUrl.split(',');
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) u8arr[n] = bstr.charCodeAt(n);
+  return new File([u8arr], filename, { type });
+}
+
+function toWebpFile(
+  file,
+  { maxWidth = 1600, maxHeight = 1600, quality = 82 } = {}
+) {
+  return new Promise((resolve, reject) => {
+    try {
+      Resizer.imageFileResizer(
+        file,
+        maxWidth,
+        maxHeight,
+        'WEBP',
+        quality,
+        0,
+        (uri) => {
+          const base = (file.name || 'upload').replace(/\.[^.]+$/, '');
+          resolve(fileFromDataUrl(uri, `${base}.webp`, 'image/webp'));
+        },
+        'base64'
+      );
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 // ---------- outbox infra ----------
 const online = () =>
   typeof navigator !== 'undefined' ? navigator.onLine : true;
@@ -174,13 +214,30 @@ async function flushOutbox() {
   }
 }
 
-// ---------- actualizar imagen (usa POST) ----------
+// ---------- actualizar imagen (usa POST + conversión a webp) ----------
 async function uploadImagenProducto(productoId, file) {
   if (!file) return '';
+
+  let toUpload = file;
+  if (file.type !== 'image/webp') {
+    try {
+      toUpload = await toWebpFile(file, {
+        maxWidth: 1600,
+        maxHeight: 1600,
+        quality: 82,
+      });
+    } catch (e) {
+      console.warn(
+        '[uploadImagenProducto] Falló conversión a WebP, usando original:',
+        e?.message || e
+      );
+      toUpload = file;
+    }
+  }
+
   const fd = new FormData();
-  const filename =
-    typeof file === 'object' && 'name' in file ? file.name : 'upload.jpg';
-  fd.append('imagen', file, filename);
+  const filename = toUpload.name || 'upload.webp';
+  fd.append('imagen', toUpload, filename);
 
   const resp = await apiFoodTrucks.post(productoImagenEndpoint(productoId), fd);
   const obj = pickObject(resp);
