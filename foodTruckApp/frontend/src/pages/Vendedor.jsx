@@ -19,6 +19,15 @@ const pickList = (res) =>
     ? res
     : [];
 
+// Resolver imagen absoluta si backend devuelve ruta relativa
+const resolveImg = (u) => {
+  if (!u) return '';
+  if (/^https?:\/\//i.test(u)) return u;
+  const base = apiFoodTrucks?.defaults?.baseURL?.replace(/\/+$/, '') || '';
+  const path = String(u).replace(/^\/+/, '');
+  return base ? `${base}/${path}` : `/${path}`;
+};
+
 export const Vendedor = () => {
   const [loading, setLoading] = useState(true);
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
@@ -38,7 +47,7 @@ export const Vendedor = () => {
           id: p.producto_id,
           name: p.nombre,
           price: Number(p.precio_base || 0),
-          image: p.image || null,
+          image: resolveImg(p.imagen_url || ''), // <<— usar URL desde BD/endpoint
           category: p.categoria_nombre || '',
         }))
     );
@@ -99,7 +108,8 @@ export const Vendedor = () => {
           // guardamos como string para UI; el filtro ya acepta boolean o string
           estado: r.estado === true ? 'Publicado' : 'Borrador',
           fecha_creacion: r.fecha_creacion || new Date().toISOString(),
-          image: null,
+          // IMPORTANTE: persistir la URL de imagen que entregue el backend
+          imagen_url: r.imagen_url ?? r.imagen ?? '',
         }));
 
         await db.transaction('rw', db.productos_v2, db.categorias, async () => {

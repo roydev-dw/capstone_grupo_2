@@ -1,5 +1,5 @@
 // src/components/supervisor/ProductosPanel.jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { productosRepo } from '../../utils/repoProductos';
 import { toast } from 'react-hot-toast';
 import { Button } from '../ui/Button';
@@ -16,8 +16,8 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
     descripcion: '',
     precio_base: '',
     tiempo_preparacion: '',
-    imagen_url: '', // si ya existe en el producto
-    imagen_file: null, // archivo a subir (nuevo)
+    imagen_url: '',
+    imagen_file: null,
     estado: true,
   });
   const [previewUrl, setPreviewUrl] = useState('');
@@ -25,8 +25,9 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
   const [busyProdId, setBusyProdId] = useState(null);
   const [savingProd, setSavingProd] = useState(false);
   const [errorProd, setErrorProd] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const inputRef = useRef(null);
 
-  // preview de imagen seleccionada
   useEffect(() => {
     if (formProd.imagen_file) {
       const u = URL.createObjectURL(formProd.imagen_file);
@@ -71,6 +72,8 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
       imagen_file: null,
       estado: true,
     });
+    setPreviewUrl('');
+    if (inputRef.current) inputRef.current.value = '';
   };
 
   const submitProducto = async (e) => {
@@ -78,7 +81,7 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
     const nombre = formProd.nombre.trim();
     const categoria_id = Number(formProd.categoria_id);
     if (!nombre || Number.isNaN(categoria_id)) {
-      toast.error('Completa nombre y categoría');
+      toast.error('Debe ingresar nombre y categoría');
       return;
     }
     setSavingProd(true);
@@ -92,8 +95,8 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
           descripcion: formProd.descripcion,
           precio_base: formProd.precio_base,
           tiempo_preparacion: formProd.tiempo_preparacion,
-          imagen_file: formProd.imagen_file || null, // FormData si hay archivo
-          imagen_url: formProd.imagen_url, // por si mantienes URL existente
+          imagen_file: formProd.imagen_file || null,
+          imagen_url: formProd.imagen_url,
           estado: formProd.estado,
         });
         toast.success(`Producto “${nombre}” actualizado`);
@@ -104,8 +107,8 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
           descripcion: formProd.descripcion,
           precio_base: formProd.precio_base,
           tiempo_preparacion: formProd.tiempo_preparacion,
-          imagen_file: formProd.imagen_file || null, // FormData en create
-          imagen_url: formProd.imagen_url, // opcional
+          imagen_file: formProd.imagen_file || null,
+          imagen_url: formProd.imagen_url,
           estado: formProd.estado,
         });
         toast.success(`Producto “${created?.nombre ?? nombre}” creado`);
@@ -134,9 +137,11 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
       precio_base: p.precio_base ?? '',
       tiempo_preparacion: p.tiempo_preparacion ?? '',
       imagen_url: p.imagen_url ?? '',
-      imagen_file: null, // al editar, por defecto no hay nueva imagen
+      imagen_file: null,
       estado: p.estado ?? true,
     });
+    setPreviewUrl('');
+    if (inputRef.current) inputRef.current.value = '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -154,7 +159,7 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
   };
 
   const deshabilitarProducto = async (id) => {
-    if (!confirm('Esto deshabilitará el producto. ¿Continuar?')) return;
+    if (!confirm('Esto deshabilitará el producto. ¿Desea continuar?')) return;
     setBusyProdId(id);
     try {
       await productosRepo.patchEstado(id, false);
@@ -168,7 +173,9 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
   };
 
   const eliminarProducto = async (id) => {
-    if (!confirm('⛔ Esto eliminará el producto definitivamente. ¿Continuar?'))
+    if (
+      !confirm('Esto eliminará el producto definitivamente. ¿Desea continuar?')
+    )
       return;
     setBusyProdId(id);
     try {
@@ -190,6 +197,36 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
     }));
   };
 
+  const openPicker = () => inputRef.current?.click();
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      setFormProd((f) => ({ ...f, imagen_file: file }));
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const clearImage = () => {
+    setFormProd((f) => ({ ...f, imagen_file: null }));
+    setPreviewUrl('');
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
   return (
     <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -198,7 +235,8 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
         <Button
           type="button"
           onClick={() => setShowDisabledProd((v) => !v)}
-          className="px-3 py-2 rounded-lg border text-sm hover:bg-gray-50"
+          size="md"
+          color="secundario"
         >
           {showDisabledProd
             ? 'Ocultar deshabilitados'
@@ -301,66 +339,108 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
           />
         </div>
 
-        <div className="md:col-span-12">
+        {/* === IMAGEN con drag & drop mejor distribuido === */}
+        <div className="md:col-span-full">
           <label className="block text-xs text-gray-600 mb-1">Imagen</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleImagenFile}
-            className="block text-sm"
-          />
 
-          {/* Preview si se eligió archivo */}
-          {previewUrl ? (
-            <div className="mt-2 flex items-center gap-3">
-              <img
-                src={previewUrl}
-                alt="Preview"
-                className="w-20 h-20 object-cover rounded-lg border"
-              />
-              <span className="text-xs text-gray-600">
-                {formProd.imagen_file?.name}
-              </span>
-            </div>
-          ) : formProd.imagen_url ? (
-            <div className="mt-2 flex items-center gap-3">
-              <img
-                src={formProd.imagen_url}
-                alt="Imagen actual"
-                className="w-20 h-20 object-cover rounded-lg border"
-              />
-              <code className="text-xs break-all text-gray-600">
-                {formProd.imagen_url}
-              </code>
-            </div>
-          ) : (
-            <p className="mt-1 text-xs text-gray-500">
-              (Opcional) Selecciona una imagen para subirla junto al producto.
-            </p>
-          )}
-        </div>
+          {/* Layout: imagen grande izquierda, botones a la derecha */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+            {/* Zona cuadrada drag & drop / preview */}
+            <div className="md:col-span-8">
+              <div
+                role="button"
+                aria-label="Zona para subir imagen"
+                tabIndex={0}
+                onClick={openPicker}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                className={[
+                  // ancho controlado + alto fijo para que no se vea alargado
+                  'relative w-full h-72 md:h-80 rounded-xl border-2 overflow-hidden',
+                  'transition cursor-pointer flex items-center justify-center',
+                  isDragging
+                    ? 'border-info bg-info/10'
+                    : 'border-dashed border-placeholder hover:border-info hover:bg-info/10',
+                ].join(' ')}
+              >
+                {previewUrl || formProd.imagen_url ? (
+                  <img
+                    src={previewUrl || formProd.imagen_url}
+                    alt="Imagen del producto"
+                    className="w-full h-full object-cover bg-white"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center text-placeholder text-center px-3">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-10 w-10 mb-2"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                    >
+                      <path strokeWidth="2" d="M12 5v14m-7-7h14" />
+                    </svg>
+                    <span className="text-xs">
+                      Arrastra tu imagen aquí o haz clic para seleccionar
+                    </span>
+                  </div>
+                )}
 
-        <div className="md:col-span-12 flex items-end gap-2">
-          <button
-            type="submit"
-            disabled={
-              savingProd ||
-              !formProd.nombre.trim() ||
-              !String(formProd.categoria_id).trim()
-            }
-            className="px-4 py-2 rounded-lg bg-primario text-white font-semibold disabled:opacity-50"
-          >
-            {editProdId ? 'Guardar cambios' : 'Crear producto'}
-          </button>
-          {editProdId && (
-            <button
-              type="button"
-              onClick={resetFormProd}
-              className="px-4 py-2 border rounded-lg"
-            >
-              Cancelar
-            </button>
-          )}
+                {/* Input real (oculto) */}
+                <input
+                  ref={inputRef}
+                  id="imagenInput"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleImagenFile(e); // tu lógica intacta
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Botones a la derecha, columna fija */}
+            <div className="md:col-span-4">
+              <div className="flex flex-col justify-between h-full gap-3">
+                <Button onClick={openPicker} color="info" className="w-full">
+                  Seleccionar imagen
+                </Button>
+
+                <Button
+                  onClick={clearImage}
+                  disabled={!previewUrl && !formProd.imagen_file}
+                  color="peligro"
+                  className="w-full"
+                >
+                  Quitar
+                </Button>
+
+                <button
+                  type="submit"
+                  disabled={
+                    savingProd ||
+                    !formProd.nombre.trim() ||
+                    !String(formProd.categoria_id).trim()
+                  }
+                  className="px-4 py-2 rounded-lg bg-primario text-white font-semibold disabled:opacity-50 w-full"
+                >
+                  {editProdId ? 'Guardar cambios' : 'Crear producto'}
+                </button>
+
+                {editProdId && (
+                  <button
+                    type="button"
+                    onClick={resetFormProd}
+                    className="px-4 py-2 border rounded-lg w-full"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </form>
 
@@ -441,7 +521,7 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
                     <button
                       onClick={() =>
                         p.estado !== false
-                          ? habilitarProducto(p.producto_id) // ojo: aquí debería ser deshabilitar si está activo (corrijo abajo)
+                          ? habilitarProducto(p.producto_id)
                           : deshabilitarProducto(p.producto_id)
                       }
                       disabled={busyProdId === p.producto_id}
