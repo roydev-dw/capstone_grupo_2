@@ -9,11 +9,7 @@ const normalizeUser = (rawUser) => {
   if (!rawUser) return null;
 
   const role =
-    rawUser.rol ||
-    rawUser.role ||
-    rawUser.user_role ||
-    rawUser.userRol ||
-    null;
+    rawUser.rol || rawUser.role || rawUser.user_role || rawUser.userRol || null;
 
   const roleObj =
     role && typeof role === 'object' && !Array.isArray(role) ? role : null;
@@ -63,8 +59,9 @@ const normalizeUser = (rawUser) => {
     roleObj?.display_name,
   ];
 
-  const roleName =
-    (roleNameCandidates.find((value) => value) || '').toString().trim();
+  const roleName = (roleNameCandidates.find((value) => value) || '')
+    .toString()
+    .trim();
 
   return {
     id:
@@ -144,11 +141,7 @@ const fetchUserFromApi = async ({ id, email }) => {
     const matchByEmail =
       !matchById && normalizedEmail
         ? list.find((item) => {
-            const candidateEmail = (
-              item.email ??
-              item.correo ??
-              ''
-            )
+            const candidateEmail = (item.email ?? item.correo ?? '')
               .toString()
               .trim()
               .toLowerCase();
@@ -227,12 +220,9 @@ export const Login = () => {
             ...baseUser,
             ...refreshedUser,
             rol_id: refreshedUser.rol_id ?? baseUser.rol_id ?? null,
-            rol_nombre:
-              refreshedUser.rol_nombre ?? baseUser.rol_nombre ?? '',
+            rol_nombre: refreshedUser.rol_nombre ?? baseUser.rol_nombre ?? '',
             nombre_completo:
-              refreshedUser.nombre_completo ??
-              baseUser.nombre_completo ??
-              '',
+              refreshedUser.nombre_completo ?? baseUser.nombre_completo ?? '',
             email:
               refreshedUser.email ??
               baseUser.email ??
@@ -240,9 +230,7 @@ export const Login = () => {
             sucursal_id:
               refreshedUser.sucursal_id ?? baseUser.sucursal_id ?? null,
             sucursal_nombre:
-              refreshedUser.sucursal_nombre ??
-              baseUser.sucursal_nombre ??
-              '',
+              refreshedUser.sucursal_nombre ?? baseUser.sucursal_nombre ?? '',
             avatar: refreshedUser.avatar ?? baseUser.avatar ?? '',
           };
         }

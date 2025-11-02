@@ -1,7 +1,7 @@
 // hooks/useCurrentUser.js
 import { useEffect, useState } from 'react';
 import { apiFoodTrucks } from '../utils/api';
-import { getStoredUser } from '../utils/session';
+import { getCurrentUser } from '../utils/session';
 
 // normaliza campos desde distintas formas posibles
 function mapUser(u) {
@@ -36,7 +36,7 @@ export function useCurrentUser({ refreshFromApiIfIncomplete = true } = {}) {
       setErrorUser('');
       try {
         // 1) desde storage
-        const stored = mapUser(getStoredUser());
+        const stored = mapUser(getCurrentUser());
         setUser(stored);
 
         // 2) refresco opcional si faltan datos críticos
@@ -55,11 +55,20 @@ export function useCurrentUser({ refreshFromApiIfIncomplete = true } = {}) {
             : [];
 
           let match = null;
-          if (stored?.id) {
-            match = list.find((u) => (u.id ?? u.usuario_id) === stored.id);
+          if (stored?.id != null) {
+            match = list.find((u) => {
+              const uid = u.id ?? u.usuario_id;
+              return uid != null && Number(uid) === Number(stored.id);
+            });
           }
           if (!match && stored?.email) {
-            match = list.find((u) => u.email === stored.email);
+            const storedEmail = String(stored.email).trim().toLowerCase();
+            match = list.find(
+              (u) =>
+                String(u.email ?? u.correo ?? '')
+                  .trim()
+                  .toLowerCase() === storedEmail
+            );
           }
           if (match) {
             const mapped = mapUser(match);
