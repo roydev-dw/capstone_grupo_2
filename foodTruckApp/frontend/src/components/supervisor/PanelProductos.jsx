@@ -356,7 +356,6 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 className={[
-                  // ancho controlado + alto fijo para que no se vea alargado
                   'relative w-full h-72 md:h-80 rounded-xl border-2 overflow-hidden',
                   'transition cursor-pointer flex items-center justify-center',
                   isDragging
@@ -394,9 +393,7 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => {
-                    handleImagenFile(e); // tu lógica intacta
-                  }}
+                  onChange={handleImagenFile}
                 />
               </div>
             </div>
@@ -417,26 +414,27 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
                   Quitar
                 </Button>
 
-                <button
+                <Button
                   type="submit"
                   disabled={
                     savingProd ||
                     !formProd.nombre.trim() ||
                     !String(formProd.categoria_id).trim()
                   }
-                  className="px-4 py-2 rounded-lg bg-primario text-white font-semibold disabled:opacity-50 w-full"
+                  className="w-full font-semibold disabled:opacity-50"
                 >
                   {editProdId ? 'Guardar cambios' : 'Crear producto'}
-                </button>
+                </Button>
 
                 {editProdId && (
-                  <button
+                  <Button
                     type="button"
                     onClick={resetFormProd}
-                    className="px-4 py-2 border rounded-lg w-full"
+                    color="secundario"
+                    className="w-full border"
                   >
                     Cancelar
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -452,9 +450,7 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
         <table className="min-w-full divide-y divide-gray-200">
           <thead>
             <tr className="bg-gray-50">
-              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">
-                ID
-              </th>
+              {/* <th>ID</th>  ← eliminado visualmente */}
               <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">
                 Nombre
               </th>
@@ -472,11 +468,13 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
               </th>
             </tr>
           </thead>
+
           <tbody className="bg-white divide-y divide-gray-200">
             {productos.length === 0 ? (
               <tr>
+                {/* colSpan: 5 porque quitamos la columna ID */}
                 <td
-                  colSpan="6"
+                  colSpan="5"
                   className="text-center py-4 text-sm text-gray-500"
                 >
                   {showDisabledProd
@@ -487,14 +485,12 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
             ) : (
               productos.map((p) => (
                 <tr
-                  key={p.producto_id}
+                  key={p.producto_id} // seguimos usando el ID internamente
                   className={`hover:bg-gray-50 ${
                     p.estado === false ? 'opacity-70' : ''
                   }`}
                 >
-                  <td className="px-4 py-2 text-sm text-gray-500">
-                    {p.producto_id}
-                  </td>
+                  {/* <td>{p.producto_id}</td>  ← eliminado visualmente */}
                   <td className="px-4 py-2 text-sm text-gray-900">
                     {p.nombre}
                   </td>
@@ -510,33 +506,37 @@ export const PanelProductos = ({ categoriasActivas = [] }) => {
                       : '—'}
                   </td>
                   <td className="px-4 py-2 text-right space-x-2">
-                    <button
+                    <Button
                       onClick={() => startEditProducto(p)}
                       disabled={!!busyProdId}
-                      className="px-3 py-1 bg-primario/10 text-primario rounded-md hover:bg-primario/20 disabled:opacity-50"
+                      className="px-3 py-1"
+                      color="info"
                     >
                       Editar
-                    </button>
+                    </Button>
 
-                    <button
+                    {/* Acción correcta según estado actual */}
+                    <Button
                       onClick={() =>
                         p.estado !== false
-                          ? habilitarProducto(p.producto_id)
-                          : deshabilitarProducto(p.producto_id)
+                          ? deshabilitarProducto(p.producto_id)
+                          : habilitarProducto(p.producto_id)
                       }
                       disabled={busyProdId === p.producto_id}
-                      className="px-3 py-1 rounded-md border hover:bg-gray-50 disabled:opacity-50"
+                      color="neutral"
+                      className="px-3 py-1"
                     >
                       {p.estado !== false ? 'Ocultar' : 'Mostrar'}
-                    </button>
+                    </Button>
 
-                    <button
+                    <Button
                       onClick={() => eliminarProducto(p.producto_id)}
                       disabled={busyProdId === p.producto_id}
-                      className="px-3 py-1 bg-secundario/10 text-secundario rounded-md hover:bg-secundario/20 disabled:opacity-50"
+                      color="peligro"
+                      className="px-3 py-1"
                     >
                       Eliminar
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))
