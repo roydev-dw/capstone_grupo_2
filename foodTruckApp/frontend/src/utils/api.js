@@ -1,29 +1,60 @@
-// utils/api.js
-const BASE = import.meta.env.VITE_API_BASE_URL_FOODTRUCKS;
+import {
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+  clearSession,
+} from './session';
 
-const getTokens = () => ({
-  access: localStorage.getItem('accessToken'),
-  refresh: localStorage.getItem('refreshToken'),
-});
+const BASE = (import.meta.env.VITE_API_BASE_URL_FOODTRUCKS || '').replace(
+  /\/+$/,
+  ''
+); // sin slash final
 
-const setTokens = ({ access, refresh }) => {
-  if (access) localStorage.setItem('accessToken', access);
-  if (refresh) localStorage.setItem('refreshToken', refresh);
-};
+// Endpoints que NO requieren Authorization (con y sin slash al final)
+const AUTH_FREE_PREFIXES = [
+  'v1/auth/login',
+  'v1/auth/login/',
+  'v1/auth/refresh',
+  'v1/auth/refresh/',
+];
 
-const clearTokens = () => {
-  localStorage.removeItem('accessToken');
-  localStorage.removeItem('refreshToken');
-  localStorage.removeItem('userData');
-};
+/** Une base y endpoint sin duplicar ni perder slashes */
+function joinUrl(base, endpoint) {
+  const e = String(endpoint || '');
+  const cleaned = e.startsWith('/') ? e.slice(1) : e;
+  return `${base}/${cleaned}`;
+}
 
-const AUTH_FREE_PREFIXES = ['v1/auth/login', 'v1/auth/refresh'];
-const isAuthFree = (endpoint) =>
-  AUTH_FREE_PREFIXES.some((p) => endpoint.startsWith(p));
+function isAuthFree(endpoint) {
+  const e = String(endpoint || '');
+  const noSlash = e.replace(/^\/+/, ''); // quita slashes iniciales
+  return AUTH_FREE_PREFIXES.some((p) => noSlash.startsWith(p));
+}
 
-const rawRequest = async (endpoint, { method = 'GET', body, headers } = {}) => {
-  const url = `${BASE}${endpoint}`;
+/** Parsea respuesta a JSON si aplica; si no, { raw: string } */
+async function parseResponse(res) {
+  if (res.status === 204) return null;
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) return await res.json();
+  return { raw: await res.text() };
+}
 
+/** Lanza error enriquecido */
+function throwHttpError(res, data) {
+  const msg =
+    (data && (data.detail || data.error || data.message)) ||
+    `${res.status} ${res.statusText}`;
+  const err = new Error(msg);
+  err.status = res.status;
+  err.data = data;
+  throw err;
+}
+
+/**
+ * Hace una request “cruda” (sin refresh). Agrega el Bearer si corresponde.
+ */
+async function rawRequest(endpoint, { method = 'GET', body, headers } = {}) {
+  const url = joinUrl(BASE, endpoint);
   const isFormData =
     typeof FormData !== 'undefined' && body instanceof FormData;
 
@@ -33,57 +64,46 @@ const rawRequest = async (endpoint, { method = 'GET', body, headers } = {}) => {
   };
 
   if (!isAuthFree(endpoint)) {
-    const { access } = getTokens();
-    if (!access) throw new Error('Falta token Bearer.');
+    const access = getAccessToken();
+    if (!access) {
+      const err = new Error('Falta token Bearer.');
+      err.status = 401;
+      throw err;
+    }
     h.Authorization = `Bearer ${access}`;
   }
-
-  // (Opcional de debug) ver URL final:
-  // console.log(`[apiFoodTrucks] ${method} ${url}`);
 
   const res = await fetch(url, {
     method,
     headers: h,
     body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
+    // credentials: 'include', // <- descomenta si usas cookies en el backend
   });
 
-  if (res.status === 204) return null;
+  const data = await parseResponse(res);
+  if (!res.ok) throwHttpError(res, data);
+  return data;
+}
 
-  const ct = res.headers.get('content-type') || '';
-  let data = null;
-  try {
-    data = ct.includes('application/json')
-      ? await res.json()
-      : await res.text();
-  } catch {}
-
-  if (!res.ok) {
-    const msg =
-      (data && (data.detail || data.error || data.message)) ||
-      `${res.status} ${res.statusText}`;
-    const err = new Error(msg);
-    err.status = res.status;
-    err.data = data;
-    throw err;
-  }
-
-  return ct.includes('application/json') ? data : { raw: data };
-};
-
-const request = async (endpoint, opts = {}) => {
+/**
+ * Request con manejo de refresh automático.
+ */
+async function request(endpoint, opts = {}) {
   try {
     return await rawRequest(endpoint, opts);
   } catch (err) {
+    // Si no es 401 o el endpoint es auth-free, no intentamos refresh
     if (err?.status !== 401 || isAuthFree(endpoint)) throw err;
 
-    const { refresh } = getTokens();
+    // Intentamos refresh
+    const refresh = getRefreshToken();
     if (!refresh) {
-      clearTokens();
+      clearSession();
       throw new Error('No hay refresh token.');
     }
 
     try {
-      const r = await rawRequest('v1/auth/refresh', {
+      const r = await rawRequest('v1/auth/refresh/', {
         method: 'POST',
         body: { refresh },
       });
@@ -93,13 +113,16 @@ const request = async (endpoint, opts = {}) => {
       if (!newAccess) throw new Error('No se recibió nuevo access token.');
 
       setTokens({ access: newAccess, refresh: newRefresh });
+
+      // Reintentamos la original
       return await rawRequest(endpoint, opts);
     } catch (e) {
-      clearTokens();
+      // Refresh falló → limpiar y notificar
+      clearSession();
       throw e;
     }
   }
-};
+}
 
 export const apiFoodTrucks = {
   get: (endpoint) => request(endpoint, { method: 'GET' }),

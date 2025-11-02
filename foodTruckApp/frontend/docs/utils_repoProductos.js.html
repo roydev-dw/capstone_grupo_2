@@ -1,4 +1,32 @@
-// utils/repoProductos.js — refactor limpio con JSDoc (fetch, sin Axios)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: utils/repoProductos.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: utils/repoProductos.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// utils/repoProductos.js — refactor limpio con JSDoc (fetch, sin Axios)
 import { db } from './db';
 import { apiFoodTrucks } from './api';
 import Resizer from 'react-image-file-resizer';
@@ -51,15 +79,15 @@ import Resizer from 'react-image-file-resizer';
 // CORRECCIÓN LÍNEAS 45 y 47
 /**
  * @typedef {object} ResultsContainer
- * @property {Array<any>} [results] - Lista de resultados opcional.
+ * @property {Array&lt;any>} [results] - Lista de resultados opcional.
  */
 /**
  * @typedef {object} DataContainer
  * @property {object} [data]
- * @property {Array<any>} [data.results]
+ * @property {Array&lt;any>} [data.results]
  */
 /**
- * @typedef {ResultsContainer|DataContainer|Array<any>} ListLike - Tipo para estructuras de respuesta de lista.
+ * @typedef {ResultsContainer|DataContainer|Array&lt;any>} ListLike - Tipo para estructuras de respuesta de lista.
  */
 
 const ENDPOINT_BASE = 'v1/productos/';
@@ -70,11 +98,11 @@ const productoImagenEndpoint = (id) => `v1/productos/${id}/imagen/`;
 /**
  * Desenvuelve una respuesta posible de fetch o un wrapper que ya retorna JSON.
  * @param {any} resp
- * @returns {Promise<any>}
+ * @returns {Promise&lt;any>}
  */
 async function unwrapResponse(resp) {
   // Si es Response de fetch
-  if (resp && typeof resp === 'object' && typeof resp.json === 'function') {
+  if (resp &amp;&amp; typeof resp === 'object' &amp;&amp; typeof resp.json === 'function') {
     const clone = resp.clone?.() ?? resp;
     return clone.json();
   }
@@ -109,7 +137,7 @@ function normalizeEstado(v) {
     v === true ||
     v === 1 ||
     v === '1' ||
-    (typeof v === 'string' && v.toLowerCase() === 'true') ||
+    (typeof v === 'string' &amp;&amp; v.toLowerCase() === 'true') ||
     v === 'Publicado'
   )
     return true;
@@ -117,7 +145,7 @@ function normalizeEstado(v) {
     v === false ||
     v === 0 ||
     v === '0' ||
-    (typeof v === 'string' && v.toLowerCase() === 'false') ||
+    (typeof v === 'string' &amp;&amp; v.toLowerCase() === 'false') ||
     v === 'Borrador'
   )
     return false;
@@ -186,7 +214,7 @@ function mapProductFromApi(p) {
  * Mapea del formulario local al payload esperado por la API.
  * Solo incluye `imagen_url` si está presente para no sobreescribir.
  * @param {ProductForm} form
- * @returns {Record<string, any>}
+ * @returns {Record&lt;string, any>}
  */
 function mapProductToApi(form) {
   const obj = {
@@ -205,20 +233,20 @@ function mapProductToApi(form) {
 /**
  * Construye un JSON de actualización, omitiendo campos vacíos.
  * @param {ProductForm} form
- * @returns {Record<string, any>}
+ * @returns {Record&lt;string, any>}
  */
 function buildUpdateJson(form) {
   const body = {};
-  if (form.categoria_id != null && String(form.categoria_id).trim() !== '')
+  if (form.categoria_id != null &amp;&amp; String(form.categoria_id).trim() !== '')
     body.categoria_id = Number(form.categoria_id);
-  if (form.nombre && String(form.nombre).trim() !== '')
+  if (form.nombre &amp;&amp; String(form.nombre).trim() !== '')
     body.nombre = String(form.nombre).trim();
-  if (form.descripcion && String(form.descripcion).trim() !== '')
+  if (form.descripcion &amp;&amp; String(form.descripcion).trim() !== '')
     body.descripcion = String(form.descripcion).trim();
   const precio = normalizeMoneyString(form.precio_base);
   if (precio) body.precio_base = precio;
   if (
-    form.tiempo_preparacion != null &&
+    form.tiempo_preparacion != null &amp;&amp;
     String(form.tiempo_preparacion).trim() !== ''
   )
     body.tiempo_preparacion = Number(form.tiempo_preparacion);
@@ -258,7 +286,7 @@ function fileFromDataUrl(
  * @property {number} [opts.maxWidth] - Ancho máximo deseado (def. 1600).
  * @property {number} [opts.maxHeight] - Altura máxima deseada (def. 1600).
  * @property {number} [opts.quality] - Calidad de la imagen (0 a 100) (def. 82).
- * @returns {Promise<File>}
+ * @returns {Promise&lt;File>}
  */
 function toWebpFile(
   file,
@@ -290,7 +318,7 @@ function toWebpFile(
  * El backend se encarga de guardar en blob storage y persistir `imagen_url`.
  * @param {string|number} productoId
  * @param {File} file
- * @returns {Promise<string>} `imagen_url` si la API la devuelve (puede ser "" si se persiste async)
+ * @returns {Promise&lt;string>} `imagen_url` si la API la devuelve (puede ser "" si se persiste async)
  */
 async function uploadImagenProducto(productoId, file) {
   if (!file) return '';
@@ -325,7 +353,7 @@ async function uploadImagenProducto(productoId, file) {
 /**
  * Obtiene un producto por ID desde la API (para refrescar campos como `imagen_url`).
  * @param {string|number} id
- * @returns {Promise<ProductApi|null>}
+ * @returns {Promise&lt;ProductApi|null>}
  */
 async function fetchProducto(id) {
   const res = await apiFoodTrucks.get(`${ENDPOINT_BASE}${id}/`);
@@ -338,10 +366,10 @@ async function fetchProducto(id) {
  * @param {string|number} id
  * @param {number} [maxTries]
  * @param {number} [delayMs]
- * @returns {Promise<ProductLocal|null>}
+ * @returns {Promise&lt;ProductLocal|null>}
  */
 async function waitForImagenUrl(id, maxTries = 3, delayMs = 400) {
-  for (let i = 0; i < maxTries; i++) {
+  for (let i = 0; i &lt; maxTries; i++) {
     const obj = await fetchProducto(id);
     const mapped = obj ? mapProductFromApi(obj) : null;
     if (mapped?.imagen_url) return mapped;
@@ -432,7 +460,7 @@ async function flushOutbox() {
 export const productosRepo = {
   /**
    * Lista productos. Intenta red desde API y sincroniza cache local.
-   * @returns {Promise<{items: ProductLocal[], source: 'network'|'cache'}>}
+   * @returns {Promise&lt;{items: ProductLocal[], source: 'network'|'cache'}>}
    */
   async list() {
     try {
@@ -459,7 +487,7 @@ export const productosRepo = {
   /**
    * Crea un producto. Si viene `imagen_file`, la sube y espera URL (con reintentos cortos).
    * @param {ProductForm} form
-   * @returns {Promise<ProductLocal>}
+   * @returns {Promise&lt;ProductLocal>}
    */
   async create(form) {
     const tempId = `tmp-${Date.now()}`;
@@ -516,7 +544,7 @@ export const productosRepo = {
    * Actualiza un producto. Si viene nueva imagen, se sube primero y luego se PUTean los otros campos.
    * @param {string|number} producto_id
    * @param {ProductForm} form
-   * @returns {Promise<ProductLocal|void>}
+   * @returns {Promise&lt;ProductLocal|void>}
    */
   async update(producto_id, form) {
     const id = String(producto_id);
@@ -676,3 +704,26 @@ export const productosRepo = {
     }
   },
 };
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#buildUpdateJson">buildUpdateJson</a></li><li><a href="global.html#extractId">extractId</a></li><li><a href="global.html#fetchProducto">fetchProducto</a></li><li><a href="global.html#fileFromDataUrl">fileFromDataUrl</a></li><li><a href="global.html#mapProductFromApi">mapProductFromApi</a></li><li><a href="global.html#mapProductToApi">mapProductToApi</a></li><li><a href="global.html#normalizeEstado">normalizeEstado</a></li><li><a href="global.html#normalizeMoneyString">normalizeMoneyString</a></li><li><a href="global.html#pickList">pickList</a></li><li><a href="global.html#pickObject">pickObject</a></li><li><a href="global.html#toWebpFile">toWebpFile</a></li><li><a href="global.html#unwrapResponse">unwrapResponse</a></li><li><a href="global.html#uploadImagenProducto">uploadImagenProducto</a></li><li><a href="global.html#useCurrentUser">useCurrentUser</a></li><li><a href="global.html#waitForImagenUrl">waitForImagenUrl</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sun Nov 02 2025 00:16:43 GMT-0300 (hora de verano de Chile)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

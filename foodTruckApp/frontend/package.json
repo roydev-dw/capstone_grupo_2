@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "docs": "jsdoc -c jsdoc.json"
   },
   "dependencies": {
     "@fontsource/luckiest-guy": "^5.2.8",
@@ -15,6 +16,7 @@
     "@tailwindcss/vite": "^4.1.13",
     "dexie": "^4.2.1",
     "dexie-react-hooks": "^4.2.0",
+    "jsdoc": "^4.0.5",
     "prop-types": "^15.8.1",
     "react": "18",
     "react-dom": "18",
