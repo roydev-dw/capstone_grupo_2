@@ -6,9 +6,10 @@ import { UserMenu } from '../components/sesion_usuario/UserMenu';
 import { Logo } from '../components/logo/Logo';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { clearSession } from '../utils/session';
-import { PanelCategorias } from '../components/supervisor/PanelCategorias';
 import { PanelProductos } from '../components/supervisor/PanelProductos';
 import { EstadoEnLinea } from '../components/ui/EstadoEnLinea';
+import { PanelCategorias } from '../components/supervisor/PanelCategorias';
+import { PendingSyncTable } from '../components/sync/PendingSyncTable';
 
 const SUCURSAL_ID = 1;
 const SUCURSAL_NOMBRE = 'Sucursal Centro';
@@ -38,6 +39,7 @@ export const Supervisor = () => {
 
       <div className="max-w-6xl mx-auto px-4 py-10 space-y-10">
         <EstadoEnLinea />
+        <PendingSyncTable />
         <PanelCategorias
           sucursalId={SUCURSAL_ID}
           sucursalNombre={SUCURSAL_NOMBRE}

@@ -10,6 +10,8 @@ import { Administrador } from './pages/Administrador';
 import RutaProtegida from './routes/RutaProtegida';
 import RutaPublica from './routes/RutaPublica';
 import AccesoProhibido from './pages/AccesoProhibido';
+import { initSyncManager, resetSyncManager } from './utils/syncManager';
+import { getAccessToken } from './utils/session';
 
 import '@fontsource/luckiest-guy';
 import '@fontsource/poppins/400.css';
@@ -19,19 +21,40 @@ import './index.css';
 
 const AppRouter = () => {
   useEffect(() => {
-    const onLogout = () => {
-      console.log('[auth:logout] disparado → redirect /');
-      localStorage.clear();
-      window.location.replace('/');
+    const ensureSync = () => {
+      try {
+        if (getAccessToken()) {
+          initSyncManager();
+        }
+      } catch {
+        // ignore storage access errors (e.g. SSR)
+      }
     };
+
+    const onLogin = () => {
+      ensureSync();
+    };
+
+    const onLogout = () => {
+      console.log('[auth:logout] disparado -> redirect /login');
+      resetSyncManager();
+      localStorage.clear();
+      window.location.replace('/login');
+    };
+
+    ensureSync();
+    window.addEventListener('auth:login', onLogin);
     window.addEventListener('auth:logout', onLogout);
-    return () => window.removeEventListener('auth:logout', onLogout);
+    return () => {
+      window.removeEventListener('auth:login', onLogin);
+      window.removeEventListener('auth:logout', onLogout);
+    };
   }, []);
 
   return (
     <BrowserRouter>
       <Routes>
-        {/* Pública para invitados */}
+        {/* Publica para invitados */}
         <Route
           path="/"
           element={
@@ -40,7 +63,15 @@ const AppRouter = () => {
             </RutaPublica>
           }
         />
-        {/* RUTA 403 PÚBLICA (sin guard) */}
+        <Route
+          path="/login"
+          element={
+            <RutaPublica>
+              <Login />
+            </RutaPublica>
+          }
+        />
+        {/* RUTA 403 PUBLICA (sin guard) */}
         <Route path="/403" element={<AccesoProhibido />} />
 
         {/* Protegidas por rol */}

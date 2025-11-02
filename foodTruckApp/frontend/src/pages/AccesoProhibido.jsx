@@ -1,22 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { getAccessToken, getCurrentUser } from '../utils/session';
-import { normalizeRoleName } from '../utils/roles';
-
 export default function ForbiddenAccessPage() {
   const navigate = useNavigate();
 
-  const goHome = () => {
-    const token = getAccessToken();
-    const user = getCurrentUser();
-    if (token && user) {
-      const role = normalizeRoleName(user.rol_nombre);
-      if (role === 'administrador')
-        return navigate('/admin', { replace: true });
-      if (role === 'supervisor')
-        return navigate('/supervisor', { replace: true });
-      return navigate('/vendedor', { replace: true });
-    }
-    return navigate('/', { replace: true });
+  const goLogin = () => {
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -28,14 +15,14 @@ export default function ForbiddenAccessPage() {
             Acceso no autorizado.
           </h1>
           <p className="font-poppins text-gray-300 text-lg font-light max-w-md mx-auto lg:mx-0">
-            Intentaste acceder a una página para la cual no tienes la
-            autorización necesaria.
+            Intentaste acceder a una pagina para la cual no tienes la
+            autorizacion necesaria.
           </p>
           <button
             className="mt-8 px-8 py-3 bg-[#5BE0B3] text-[#1C2127] font-semibold text-lg rounded-lg shadow-lg hover:bg-[#6EECC1] transition duration-300"
-            onClick={goHome}
+            onClick={goLogin}
           >
-            Volver a tu inicio
+            Volver al login
           </button>
         </div>
 

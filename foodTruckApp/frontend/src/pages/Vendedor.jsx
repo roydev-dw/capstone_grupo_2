@@ -36,21 +36,18 @@ export const Vendedor = () => {
   const [fetchError, setFetchError] = useState('');
 
   const carrito = useLiveQuery(() => db.carrito.toArray(), []) || [];
-  const productosDB = useLiveQuery(() => db.productos_v2.toArray(), []) || [];
+  const productosDB = useLiveQuery(() => db.products.toArray(), []) || [];
 
   const productosUI = useMemo(() => {
-    return (
-      (productosDB || [])
-        // acepta boolean true o string 'Publicado'
-        .filter((p) => p.estado === true || p.estado === 'Publicado')
-        .map((p) => ({
-          id: p.producto_id,
-          name: p.nombre,
-          price: Number(p.precio_base || 0),
-          image: resolveImg(p.imagen_url || ''), // <<— usar URL desde BD/endpoint
-          category: p.categoria_nombre || '',
-        }))
-    );
+    return (productosDB || [])
+      .filter((p) => p.estado === true || p.estado === 'Publicado')
+      .map((p) => ({
+        id: p.producto_id,
+        name: p.nombre,
+        price: Number(p.precio_base || 0),
+        image: resolveImg(p.imagen_url || ''),
+        category: p.categoria_nombre || '',
+      }));
   }, [productosDB]);
 
   const generarIdItemCarrito = useCallback((producto) => {
@@ -91,40 +88,68 @@ export const Vendedor = () => {
           return;
         }
 
-        const countPrev = await db.productos_v2.count();
+        const countPrev = await db.products.count();
         setLoading(countPrev === 0);
 
         const res = await apiFoodTrucks.get('v1/productos/');
-        const list = pickList(res); // <-- normalización robusta
+        const list = pickList(res);
 
-        const normalizados = list.map((r) => ({
-          producto_id: String(r.producto_id),
-          categoria_id: String(r.categoria_id ?? 'sin-categoria'),
-          categoria_nombre: r.categoria_nombre ?? 'Sin categoría',
-          nombre: r.nombre,
-          descripcion: r.descripcion ?? '',
-          precio_base: Number(r.precio_base || 0),
-          tiempo_preparacion: Number(r.tiempo_preparacion || 0),
-          // guardamos como string para UI; el filtro ya acepta boolean o string
-          estado: r.estado === true ? 'Publicado' : 'Borrador',
-          fecha_creacion: r.fecha_creacion || new Date().toISOString(),
-          // IMPORTANTE: persistir la URL de imagen que entregue el backend
-          imagen_url: r.imagen_url ?? r.imagen ?? '',
-        }));
+        const normalizados = list.map((r) => {
+          const productoId = String(r.producto_id ?? r.id ?? '');
+          const categoriaId = String(r.categoria_id ?? 'sin-categoria');
+          const updatedAt =
+            r.updated_at ??
+            r.updatedAt ??
+            r.fecha_actualizacion ??
+            r.fecha_creacion ??
+            new Date().toISOString();
+          const syncedAt = new Date().toISOString();
+          return {
+            id: productoId,
+            producto_id: productoId,
+            categoria_id: categoriaId,
+            categoria_nombre: r.categoria_nombre ?? 'Sin categoria',
+            nombre: r.nombre ?? '',
+            descripcion: r.descripcion ?? '',
+            precio_base: Number(r.precio_base ?? 0),
+            tiempo_preparacion: Number(r.tiempo_preparacion ?? 0),
+            estado: r.estado !== false,
+            fecha_creacion: r.fecha_creacion || updatedAt,
+            imagen_url: r.imagen_url ?? r.imagen ?? '',
+            updatedAt,
+            pending: false,
+            tempId: null,
+            syncedAt,
+            lastError: null,
+            pendingOp: null,
+          };
+        });
 
-        await db.transaction('rw', db.productos_v2, db.categorias, async () => {
-          await db.productos_v2.bulkPut(normalizados);
+        await db.transaction('rw', db.products, db.categories, async () => {
+          await db.products.bulkPut(normalizados);
 
           const categoriasDerivadas = [
             ...new Map(
               normalizados.map((p) => [
                 p.categoria_id,
-                { categoria_id: p.categoria_id, nombre: p.categoria_nombre },
+                {
+                  id: p.categoria_id,
+                  categoria_id: p.categoria_id,
+                  nombre: p.categoria_nombre,
+                  descripcion: '',
+                  estado: true,
+                  updatedAt: new Date().toISOString(),
+                  pending: false,
+                  tempId: null,
+                  syncedAt: new Date().toISOString(),
+                  lastError: null,
+                  pendingOp: null,
+                },
               ])
             ).values(),
           ];
           if (categoriasDerivadas.length) {
-            await db.categorias.bulkPut(categoriasDerivadas);
+            await db.categories.bulkPut(categoriasDerivadas);
           }
         });
       } catch (error) {
