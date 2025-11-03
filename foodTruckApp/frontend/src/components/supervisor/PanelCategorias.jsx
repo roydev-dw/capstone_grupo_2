@@ -179,7 +179,7 @@ export const PanelCategorias = ({
       <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
         <div className="text-xs text-gray-500 uppercase">Sucursal</div>
         <div className="text-sm font-medium text-gray-900">
-          {sucursalNombre}
+          {sucursalNombre || 'Sin sucursal asignada'}
         </div>
       </div>
 
@@ -252,9 +252,6 @@ export const PanelCategorias = ({
         <thead>
           <tr className="bg-gray-50">
             <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">
-              ID
-            </th>
-            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">
               Nombre
             </th>
             <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">
@@ -269,7 +266,7 @@ export const PanelCategorias = ({
           {categorias.length === 0 ? (
             <tr>
               <td
-                colSpan="4"
+                colSpan="3"
                 className="text-center py-4 text-sm text-gray-500"
               >
                 {showDisabled
@@ -280,15 +277,13 @@ export const PanelCategorias = ({
           ) : (
             categorias.map((c) => (
               <tr
-                key={c.categoria_id}
                 className={`hover:bg-gray-50 ${
                   c.estado === false ? 'opacity-70' : ''
                 }`}
               >
-                <td className="px-4 py-2 text-sm text-gray-500">
-                  {c.categoria_id}
+                <td className="px-4 py-2 text-sm text-gray-900">
+                  {c.nombre}
                 </td>
-                <td className="px-4 py-2 text-sm text-gray-900">{c.nombre}</td>
                 <td className="px-4 py-2 text-sm text-gray-700">
                   {c.descripcion || '—'}
                 </td>
@@ -329,3 +324,7 @@ export const PanelCategorias = ({
     </section>
   );
 };
+
+
+
+

@@ -6,6 +6,7 @@ import {
   retryOutboxEntry,
   syncNow,
 } from '../../utils/syncManager';
+import { Button } from '../ui/Button';
 
 const STATUS_LABELS = {
   pending: 'Pendiente',
@@ -43,44 +44,16 @@ function formatTs(ts) {
 
 export const PendingSyncTable = () => {
   const entries =
-    useLiveQuery(
-      () => db.outbox.orderBy('ts').reverse().toArray(),
-      []
-    ) || [];
+    useLiveQuery(() => db.outbox.orderBy('ts').reverse().toArray(), []) || [];
 
   const hasEntries = entries.length > 0;
-
-  const totals = useMemo(() => {
-    const counters = { pending: 0, sending: 0, error: 0 };
-    for (const entry of entries) {
-      if (entry.status in counters) counters[entry.status] += 1;
-    }
-    return counters;
-  }, [entries]);
-
-  if (!hasEntries) {
-    return (
-      <section className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-700">
-            Cola de sincronizacion
-          </h2>
-          <button
-            type="button"
-            className="text-sm px-3 py-1.5 rounded bg-slate-100 text-slate-500 cursor-not-allowed"
-            disabled
-          >
-            Sincronizar ahora
-          </button>
-        </div>
-        <p className="text-sm text-gray-500">
-          No hay operaciones pendientes. Todo esta sincronizado.
-        </p>
-      </section>
-    );
-  }
+  const hasWork = useMemo(
+    () => entries.some((entry) => entry.status !== 'synced'),
+    [entries]
+  );
 
   const handleSyncNow = async () => {
+    if (!hasWork) return;
     await syncNow();
   };
 
@@ -97,32 +70,42 @@ export const PendingSyncTable = () => {
       typeof window === 'undefined'
         ? true
         : window.confirm(
-            'Esta operación no se pudo sincronizar. ¿Deseas descartarla?'
+            'Esta operacion no se pudo sincronizar. Deseas descartarla?'
           );
     if (!shouldDiscard) return;
     await removeOutboxEntry(key);
   };
 
+  const header = (
+    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <h2 className="text-xl font-semibold text-gray-700">
+        Cola de sincronizacion
+      </h2>
+      <Button
+        type="button"
+        disabled={!hasWork}
+        color="secundario"
+        onClick={handleSyncNow}
+      >
+        Sincronizar
+      </Button>
+    </div>
+  );
+
+  if (!hasEntries) {
+    return (
+      <section className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+        {header}
+        <p className="text-sm text-gray-500">
+          No hay operaciones pendientes. Todo esta sincronizado.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-700">
-            Cola de sincronizacion
-          </h2>
-          <p className="text-xs text-gray-500">
-            Pendientes: {totals.pending} | Enviando: {totals.sending} | Errores:{' '}
-            {totals.error}
-          </p>
-        </div>
-          <button
-          type="button"
-          className="px-3 py-1.5 text-sm font-semibold bg-emerald-600 text-white rounded hover:bg-emerald-500 transition"
-          onClick={handleSyncNow}
-        >
-          Sincronizar ahora
-        </button>
-      </div>
+      {header}
 
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
@@ -132,7 +115,6 @@ export const PendingSyncTable = () => {
               <th className="px-3 py-2">Operacion</th>
               <th className="px-3 py-2">Estado</th>
               <th className="px-3 py-2">Ultimo intento</th>
-              <th className="px-3 py-2">Detalle</th>
               <th className="px-3 py-2 text-right">Acciones</th>
             </tr>
           </thead>
@@ -144,21 +126,29 @@ export const PendingSyncTable = () => {
               const opLabel = OP_LABELS[entry.op] || entry.op;
               const statusColor =
                 STATUS_COLORS[entry.status] || 'text-slate-600';
+              const statusTooltip = entry.error || undefined;
+
               return (
                 <tr key={`${entry.type}-${entry.op}-${key}`}>
                   <td className="px-3 py-2 text-slate-700">{typeLabel}</td>
                   <td className="px-3 py-2 text-slate-600">{opLabel}</td>
-                  <td className={`px-3 py-2 font-medium ${statusColor}`}>
+                  <td
+                    className={`px-3 py-2 font-medium ${statusColor}`}
+                    title={statusTooltip}
+                  >
                     {statusLabel}
+                    {entry.status === 'error' && statusTooltip ? (
+                      <span className="ml-2 text-xs text-slate-400">
+                        (detalle)
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2 text-slate-500">
                     {formatTs(entry.ts)}
                   </td>
-                  <td className="px-3 py-2 text-slate-500 text-xs">
-                    {entry.error ? entry.error : '-'}
-                  </td>
                   <td className="px-3 py-2 text-right space-x-2">
-                    {(entry.status === 'error' || entry.status === 'pending') && (
+                    {(entry.status === 'error' ||
+                      entry.status === 'pending') && (
                       <button
                         type="button"
                         className="text-sm font-semibold text-sky-600 hover:text-sky-500"
