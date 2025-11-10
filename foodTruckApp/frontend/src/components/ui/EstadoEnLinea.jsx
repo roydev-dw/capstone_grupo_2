@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export const EstadoEnLinea = ({ className = '' }) => {
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator === 'undefined' ? true : navigator.onLine
-  );
+  const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -17,19 +15,22 @@ export const EstadoEnLinea = ({ className = '' }) => {
     };
   }, []);
 
-  const colorClass = isOnline ? 'text-green-600' : 'text-red-600';
-  const label = isOnline ? 'En linea' : 'Sin conexion';
+  const colorText = isOnline ? 'text-emerald-600' : 'text-red-600';
+  const colorBorder = isOnline ? 'border-emerald-600' : 'border-red-600';
+  const colorFondo = isOnline ? 'bg-emerald-600/5' : 'bg-red-600/10';
+  const label = isOnline ? 'En línea' : 'Sin conexión';
 
   return (
-    <div className={`w-full justify-center items-center ${className}`}>
-      <div className="max-w-6xl">
-        <span className="text-xs text-gray-500">Estado:&nbsp;</span>
-        <span
-          className={`text-xs font-semibold ${colorClass}`}
-          aria-live="polite"
-        >
-          {label}
-        </span>
+    <div className={`w-full flex justify-center items-center ${className}`}>
+      <div className='w-6xl flex justify-start items-center'>
+        <div className={`rounded-md border px-3 py-2 ${colorBorder} ${colorFondo}`}>
+          <span className='text-sm font-semibold text-gray-600'>Estado: </span>
+          <span
+            className={`text-sm font-semibold ${colorText}`}
+            aria-live='polite'>
+            {label}
+          </span>
+        </div>
       </div>
     </div>
   );

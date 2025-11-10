@@ -14,15 +14,21 @@ export default function PublicRoute({ children }) {
   // Si hay sesión, lo enviamos a su área correspondiente
   if (token && user) {
     const role = normalizeRoleName(user.rol_nombre);
-    let target = '/vendedor'; // valor por defecto
+    let target = '/vendedor';
 
-    if (role === 'administrador') target = '/admin';
-    else if (role === 'supervisor') target = '/supervisor';
-    else if (role === 'vendedor') target = '/vendedor';
+    if (role === 'administrador' || role === 'supervisor') {
+      target = '/panel';
+    } else if (role === 'vendedor') {
+      target = '/vendedor';
+    }
 
-    return <Navigate to={target} replace state={{ from: location }} />;
+    return (
+      <Navigate
+        to={target}
+        replace
+        state={{ from: location }}
+      />
+    );
   }
-
-  // Si no hay sesión, muestra la página pública (por ejemplo, Login)
   return <>{children}</>;
 }

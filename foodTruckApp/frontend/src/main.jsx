@@ -7,6 +7,7 @@ import { Login } from './pages/Login';
 import { Vendedor } from './pages/Vendedor';
 import { Supervisor } from './pages/Supervisor';
 import { Administrador } from './pages/Administrador';
+import { PanelOperaciones } from './pages/PanelOperaciones';
 import RutaProtegida from './routes/RutaProtegida';
 import RutaPublica from './routes/RutaPublica';
 import AccesoProhibido from './pages/AccesoProhibido';
@@ -56,7 +57,7 @@ const AppRouter = () => {
       <Routes>
         {/* Publica para invitados */}
         <Route
-          path="/"
+          path='/'
           element={
             <RutaPublica>
               <Login />
@@ -64,7 +65,7 @@ const AppRouter = () => {
           }
         />
         <Route
-          path="/login"
+          path='/login'
           element={
             <RutaPublica>
               <Login />
@@ -72,35 +73,62 @@ const AppRouter = () => {
           }
         />
         {/* RUTA 403 PUBLICA (sin guard) */}
-        <Route path="/403" element={<AccesoProhibido />} />
+        <Route
+          path='/403'
+          element={<AccesoProhibido />}
+        />
 
         {/* Protegidas por rol */}
         <Route
-          path="/vendedor"
+          path='/vendedor'
           element={
-            <RutaProtegida allow={['vendedor']} forbiddenTo="/403">
+            <RutaProtegida
+              allow={['vendedor', 'supervisor', 'administrador']}
+              forbiddenTo='/403'>
               <Vendedor />
             </RutaProtegida>
           }
         />
         <Route
-          path="/supervisor"
+          path='/supervisor'
           element={
-            <RutaProtegida allow={['supervisor']} forbiddenTo="/403">
+            <RutaProtegida
+              allow={['supervisor', 'administrador']}
+              forbiddenTo='/403'>
               <Supervisor />
             </RutaProtegida>
           }
         />
         <Route
-          path="/admin"
+          path='/panel'
           element={
-            <RutaProtegida allow={['administrador']} forbiddenTo="/403">
+            <RutaProtegida
+              allow={['supervisor', 'administrador']}
+              forbiddenTo='/403'>
+              <PanelOperaciones />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path='/admin'
+          element={
+            <RutaProtegida
+              allow={['administrador']}
+              forbiddenTo='/403'>
               <Administrador />
             </RutaProtegida>
           }
         />
         {/* Catch-all al final */}
-        <Route path="*" element={<Navigate to="/403" replace />} />
+        <Route
+          path='*'
+          element={
+            <Navigate
+              to='/403'
+              replace
+            />
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
