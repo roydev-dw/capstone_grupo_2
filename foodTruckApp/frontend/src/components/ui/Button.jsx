@@ -20,15 +20,11 @@ export const Button = ({
     : 'focus-visible:ring-0 ring-0';
 
   const colorClasses = {
-    primario:
-      'bg-primario text-white hover:scale-105 focus-visible:ring-primario/50',
-    secundario:
-      'bg-secundario text-white hover:scale-105 focus-visible:ring-secundario/50',
+    primario: 'bg-primario text-white hover:scale-105 focus-visible:ring-primario/50',
+    secundario: 'bg-secundario text-white hover:scale-105 focus-visible:ring-secundario/50',
     info: 'bg-info text-white hover:scale-105 focus-visible:ring-info/50',
-    peligro:
-      'bg-peligro text-white hover:scale-105 focus-visible:ring-peligro/50',
-    neutral:
-      'bg-gray-200 text-gray-800 hover:scale-105 focus-visible:ring-gray-400/50',
+    peligro: 'bg-peligro text-white hover:scale-105 focus-visible:ring-peligro/50',
+    neutral: 'bg-gray-200 text-gray-800 hover:scale-105 focus-visible:ring-gray-400/50',
   }[color];
 
   const sizeClasses = {
@@ -37,10 +33,18 @@ export const Button = ({
     lg: 'px-5 py-3 text-lg',
   }[size];
 
+  const handleClick = (e) => {
+    if (type !== 'submit') {
+      e.preventDefault?.();
+    }
+    e.stopPropagation?.();
+    onClick?.(e);
+  };
+
   return (
     <button
       type={type}
-      onClick={onClick}
+      onClick={handleClick}
       disabled={disabled}
       className={`${baseClasses} ${focusClasses} ${colorClasses} ${sizeClasses} ${className}`}
     >
@@ -48,3 +52,4 @@ export const Button = ({
     </button>
   );
 };
+

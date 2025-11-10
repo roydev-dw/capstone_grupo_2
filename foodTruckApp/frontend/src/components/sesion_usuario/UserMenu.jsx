@@ -2,14 +2,14 @@ import { useNavigate } from 'react-router-dom';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { clearSession } from '../../utils/session';
 import { Button } from '../ui/Button';
+import { RoleNavigator } from '../navigation/RoleNavigator';
 
-export const UserMenu = ({ user: userProp, onLogout }) => {
+export const UserMenu = ({ user: userProp, onLogout, className = '' }) => {
   const { user: hookUser } = useCurrentUser();
   const user = userProp || hookUser;
   const navigate = useNavigate();
 
-  const displayName =
-    user?.nombre_completo || user?.name || user?.email || 'Usuario';
+  const displayName = user?.nombre_completo || user?.name || user?.email || 'Usuario';
   const displayRole = user?.rol_nombre || '';
 
   const handleLogout =
@@ -20,20 +20,20 @@ export const UserMenu = ({ user: userProp, onLogout }) => {
     });
 
   return (
-    <div className="w-full flex justify-end items-cente">
-      <div className="flex flex-col items-center justify-center mr-6">
-        <span className="text-md font-semibold text-primario">
-          {displayRole}
-        </span>
-        <span className="text-md font-semibold text-secundario">
-          {displayName}
-        </span>
+    <div className={`flex items-center gap-4 ${className}`}>
+      <div className='flex items-center gap-3'>
+        <RoleNavigator />
+        <div className='flex flex-col text-right'>
+          <span className='text-xl font-black text-secundario'>{displayName}</span>
+          <span className='text-sm font-semibold text-primario'>{displayRole}</span>
+        </div>
       </div>
-      <div className="flex items-center justify-center">
-        <Button color="secundario" onClick={handleLogout}>
-          Cerrar sesión
-        </Button>
-      </div>
+      <Button
+        color='secundario'
+        onClick={handleLogout}
+        className='ml-2'>
+        Cerrar sesion
+      </Button>
     </div>
   );
 };

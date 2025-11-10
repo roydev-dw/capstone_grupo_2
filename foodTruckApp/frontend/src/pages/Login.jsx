@@ -261,10 +261,13 @@ export const Login = () => {
       const roleId = Number(user?.rol_id);
       let target = '/vendedor'; // default
 
-      if (roleName === 'administrador' || roleId === 1) {
-        target = '/admin';
-      } else if (roleName === 'supervisor' || roleId === 3) {
-        target = '/supervisor';
+      if (
+        roleName === 'administrador' ||
+        roleId === 1 ||
+        roleName === 'supervisor' ||
+        roleId === 3
+      ) {
+        target = '/panel';
       }
 
       navigate(target);

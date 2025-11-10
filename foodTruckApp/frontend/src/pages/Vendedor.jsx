@@ -63,10 +63,7 @@ export const Vendedor = () => {
 
   const calcularPrecioFinalUnitario = useCallback((producto) => {
     const extras = producto.selectedOptions
-      ? Object.values(producto.selectedOptions).reduce(
-          (t, o) => t + (o.extraPrice || 0),
-          0
-        )
+      ? Object.values(producto.selectedOptions).reduce((t, o) => t + (o.extraPrice || 0), 0)
       : 0;
     return (producto.price || 0) + extras;
   }, []);
@@ -78,13 +75,9 @@ export const Vendedor = () => {
 
         const accessToken = localStorage.getItem('accessToken');
         if (!accessToken) {
-          console.warn(
-            '[Vendedor] No se encontró accessToken. No se sincronizarán productos.'
-          );
+          console.warn('[Vendedor] No se encontró accessToken. No se sincronizarán productos.');
           setLoading(false);
-          setFetchError(
-            'No se encontró una sesión activa. Inicia sesión nuevamente.'
-          );
+          setFetchError('No se encontró una sesión activa. Inicia sesión nuevamente.');
           return;
         }
 
@@ -98,11 +91,7 @@ export const Vendedor = () => {
           const productoId = String(r.producto_id ?? r.id ?? '');
           const categoriaId = String(r.categoria_id ?? 'sin-categoria');
           const updatedAt =
-            r.updated_at ??
-            r.updatedAt ??
-            r.fecha_actualizacion ??
-            r.fecha_creacion ??
-            new Date().toISOString();
+            r.updated_at ?? r.updatedAt ?? r.fecha_actualizacion ?? r.fecha_creacion ?? new Date().toISOString();
           const syncedAt = new Date().toISOString();
           return {
             id: productoId,
@@ -276,59 +265,51 @@ export const Vendedor = () => {
     setItemParaEditar(null);
   }, []);
 
-  const cartCount = useMemo(
-    () => carrito.reduce((sum, item) => sum + item.quantity, 0),
-    [carrito]
-  );
+  const cartCount = useMemo(() => carrito.reduce((sum, item) => sum + item.quantity, 0), [carrito]);
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <p className="text-xl">Cargando productos...</p>
+      <div className='flex h-screen w-full items-center justify-center'>
+        <p className='text-xl'>Cargando productos...</p>
       </div>
     );
   }
 
   const isModalOpen = !!productoSeleccionado || !!itemParaEditar;
   const productoEnModal = itemParaEditar || productoSeleccionado;
-  const onModalSubmit = itemParaEditar
-    ? handleActualizarItemEnCarrito
-    : handleAddCarrito;
+  const onModalSubmit = itemParaEditar ? handleActualizarItemEnCarrito : handleAddCarrito;
 
   return (
-    <div className="min-h-screen bg-elemento ">
-      <div className="lg:flex min-h-screen">
-        <div className="flex flex-col min-h-screen flex-1 overflow-y-auto">
+    <div className='min-h-screen bg-elemento '>
+      <div className='lg:flex min-h-screen'>
+        <div className='flex flex-col min-h-screen flex-1 overflow-y-auto'>
           <Header />
 
           {fetchError && (
-            <div className="mx-6 mt-24 lg:mt-6 bg-red-100 text-red-700 border border-red-300 rounded-lg px-4 py-3">
-              <p className="font-semibold">No se pudieron cargar productos</p>
-              <p className="text-sm">{fetchError}</p>
+            <div className='mx-6 mt-24 lg:mt-6 bg-red-100 text-red-700 border border-red-300 rounded-lg px-4 py-3'>
+              <p className='font-semibold'>No se pudieron cargar productos</p>
+              <p className='text-sm'>{fetchError}</p>
             </div>
           )}
 
-          <main className="flex-1 px-6 pb-6 pt-40 lg:p-12">
+          <main className='flex-1 px-6 pb-6 pt-40 lg:p-12'>
             <FiltroCategoria />
 
             {productosUI.length === 0 ? (
-              <div className="mt-8 p-6 bg-white rounded-xl border text-gray-600">
-                <p className="font-semibold">No hay productos para mostrar.</p>
-                <p className="text-sm mt-1">
-                  Verifica que tu endpoint <code>/v1/productos/</code> esté
-                  devolviendo productos con
-                  <code className="mx-1">estado: true</code> (se muestran como{' '}
-                  <em>Publicado</em>).
+              <div className='mt-8 p-6 bg-white rounded-xl border text-gray-600'>
+                <p className='font-semibold'>No hay productos para mostrar.</p>
+                <p className='text-sm mt-1'>
+                  Verifica que tu endpoint <code>/v1/productos/</code> esté devolviendo productos con
+                  <code className='mx-1'>estado: true</code> (se muestran como <em>Publicado</em>).
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 grid-cols-extra gap-8 mt-8">
+              <div className='grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 grid-cols-extra gap-8 mt-8'>
                 {productosUI.map((p) => (
                   <div
                     key={p.id}
-                    className="cursor-pointer"
-                    onClick={() => handleProductClick(p)}
-                  >
+                    className='cursor-pointer'
+                    onClick={() => handleProductClick(p)}>
                     <TarjetaProducto product={p} />
                   </div>
                 ))}
@@ -345,7 +326,7 @@ export const Vendedor = () => {
             )}
           </main>
 
-          <div className="lg:hidden">
+          <div className='lg:hidden'>
             <BotonTarjeta
               cartCount={cartCount}
               onClick={() => setIsMobileAbrirCarrito(true)}
@@ -353,7 +334,7 @@ export const Vendedor = () => {
           </div>
         </div>
 
-        <div className="hidden lg:block lg:w-1/4 lg:min-w-[420px]">
+        <div className='hidden lg:block lg:w-1/4 lg:min-w-[420px]'>
           <PedidoActual
             cart={carrito}
             onEditarItem={handleEditarItem}
@@ -367,15 +348,13 @@ export const Vendedor = () => {
 
       {isMobileAbrirCarrito && (
         <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 lg:hidden"
+          className='fixed inset-0 bg-black/70 backdrop-blur-sm z-50 lg:hidden'
           onClick={() => setIsMobileAbrirCarrito(false)}
-          aria-modal="true"
-          role="dialog"
-        >
+          aria-modal='true'
+          role='dialog'>
           <div
-            className="absolute right-0 top-0 h-full w-full max-w-sm bg-fondo shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+            className='absolute right-0 top-0 h-full w-full max-w-sm bg-fondo shadow-xl'
+            onClick={(e) => e.stopPropagation()}>
             <PedidoActual
               cart={carrito}
               onClearCart={handleClearCarrito}
