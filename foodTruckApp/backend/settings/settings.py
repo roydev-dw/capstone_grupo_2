@@ -12,6 +12,9 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import datetime
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
+from azure.identity import DefaultAzureCredential
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -86,26 +89,37 @@ TEMPLATES = [
 WSGI_APPLICATION = 'settings.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
+# --- Configuración Key Vault ---
+KEY_VAULT_URL = "https://keysfoodtruckapp.vault.azure.net/"
+
+try:
+    credential = DefaultAzureCredential()
+    client = SecretClient(vault_url=KEY_VAULT_URL, credential=credential)
+    DB_PASSWORD = client.get_secret("dbpassword").value
+except Exception as e:
+    # Si hay error, dejamos un fallback (útil en desarrollo)
+    print("⚠️ No se pudo obtener el secreto de Key Vault:", e)
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+# --------------------------------
 
 DATABASES = {
     'default': {
-        'ENGINE': 'mssql',  # mssql-django
+        'ENGINE': 'mssql', 
         'NAME': 'bdfoodtruck',
         'USER': 'vincent',
-        'PASSWORD': 'Pw7LhzxEnaCNTgZ',  # <-- sin llaves
+        'PASSWORD': DB_PASSWORD,
         'HOST': 'appfoodtruck.database.windows.net',
-        'PORT': '1433',
+        'PORT': '',
+        'CONN_MAX_AGE': 60,
         'OPTIONS': {
             'driver': 'ODBC Driver 18 for SQL Server',
             'encrypt': True,
             'trust_server_certificate': False,
-            # 'connection_timeout': 30,   # opcional
+            'connection_timeout': 15,
+            'timeout': 30,
         },
     }
 }
-
 
 
 # DATABASES = {
@@ -169,4 +183,8 @@ JWT_ALGORITHM = 'HS256' # Algoritmo de firma
 JWT_ACCESS_TTL = datetime.timedelta(minutes=60) # Token válido por 60 minutos
 JWT_REFRESH_TTL = datetime.timedelta(days=7) # Refresh token válido por 7 días
 
-
+# Configuración Blob Storage
+AZURE_BLOB_ACCOUNT_URL = "https://imagenesappfoodtruck.blob.core.windows.net"
+AZURE_BLOB_CONTAINER   = "imagenes"
+AZURE_DEFAULT_CREDENTIAL = DefaultAzureCredential()
+MAX_UPLOAD_MB = 100  # Tamaño máximo de subida de imágenes en MB

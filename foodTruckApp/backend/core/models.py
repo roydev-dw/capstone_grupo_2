@@ -113,7 +113,7 @@ class Producto(models.Model):
 
     precio_base = models.DecimalField(max_digits=10, decimal_places=2, db_column='PrecioBase')
     tiempo_preparacion = models.IntegerField(db_column='TiempoPreparacion')  # minutos
-
+    imagen_url = models.CharField(max_length=500, db_column='ImagenURL' , blank=True, null=True)
     estado = models.BooleanField(default=True, db_column='Estado')
     fecha_creacion = models.DateTimeField(auto_now_add=True, db_column='FechaCreacion')
 
