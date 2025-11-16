@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef, forwardRef, useImperativeHandle } from 'react';
+﻿import { useEffect, useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { productosRepo } from '../../utils/repoProductos';
 import { toast } from 'react-hot-toast';
 import { Button } from '../ui/Button';
 
-export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
+export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId }, ref) => {
   const [productos, setProductos] = useState([]);
   const [loadingProd, setLoadingProd] = useState(true);
   const [showDisabledProd, setShowDisabledProd] = useState(false);
@@ -45,7 +45,11 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
   }, [formProd.imagen_file]);
 
   const cargarProductos = async () => {
-    const { items } = await productosRepo.list();
+    if (sucursalId == null) {
+      setProductos([]);
+      return;
+    }
+    const { items } = await productosRepo.list({ sucursalId });
     const filtrados = items.filter((p) => (showDisabledProd ? true : p.estado !== false));
     setProductos(filtrados);
   };
@@ -61,7 +65,7 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
         setLoadingProd(false);
       }
     })();
-  }, [showDisabledProd]);
+  }, [showDisabledProd, sucursalId]);
 
   const resetFormProd = () => {
     setEditProdId(null);
@@ -84,7 +88,11 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
     const nombre = formProd.nombre.trim();
     const categoria_id = Number(formProd.categoria_id);
     if (!nombre || Number.isNaN(categoria_id)) {
-      toast.error('Debe ingresar nombre y categoría');
+      toast.error('Debe ingresar nombre y categoria');
+      return;
+    }
+    if (sucursalId == null) {
+      toast.error('Debes asignar una sucursal antes de gestionar productos.');
       return;
     }
     setSavingProd(true);
@@ -101,8 +109,9 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
           imagen_file: formProd.imagen_file || null,
           imagen_url: formProd.imagen_url,
           estado: formProd.estado,
+          sucursal_id: sucursalId,
         });
-        toast.success(`Producto “${nombre}” actualizado`);
+        toast.success(`Producto ${nombre} actualizado`);
       } else {
         const created = await productosRepo.create({
           categoria_id,
@@ -113,8 +122,9 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
           imagen_file: formProd.imagen_file || null,
           imagen_url: formProd.imagen_url,
           estado: formProd.estado,
+          sucursal_id: sucursalId,
         });
-        toast.success(`Producto “${created?.nombre ?? nombre}” creado`);
+        toast.success(`Producto ${created?.nombre ?? nombre} creado`);
       }
       resetFormProd();
       await cargarProductos();
@@ -221,25 +231,28 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
     if (inputRef.current) inputRef.current.value = '';
   };
 
+  if (sucursalId == null) {
+    return (
+      <section
+        ref={sectionRef}
+        className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center text-gray-600'>
+        <p className='text-lg font-semibold text-texto'>Selecciona un foodtruck</p>
+        <p className='text-sm'>Elige una sucursal para administrar sus productos.</p>
+      </section>
+    );
+  }
+
   return (
-    <section
-      ref={sectionRef}
-      className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6'>
+    <section ref={sectionRef} className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6'>
       <div className='flex items-center justify-between gap-4'>
         <h2 className='text-xl font-semibold text-gray-900'>Productos</h2>
 
-        <Button
-          type='button'
-          onClick={() => setShowDisabledProd((v) => !v)}
-          size='md'
-          color='secundario'>
+        <Button type='button' onClick={() => setShowDisabledProd((v) => !v)} size='md' color='secundario'>
           {showDisabledProd ? 'Ocultar deshabilitados' : 'Mostrar deshabilitados'}
         </Button>
       </div>
 
-      <form
-        onSubmit={submitProducto}
-        className='grid grid-cols-1 md:grid-cols-12 gap-4'>
+      <form onSubmit={submitProducto} className='grid grid-cols-1 md:grid-cols-12 gap-4'>
         <div className='md:col-span-3'>
           <label className='block text-xs text-gray-600 mb-1'>Categoría</label>
           <select
@@ -248,9 +261,7 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
             className='border border-gray-300 rounded-lg px-3 py-2 w-full'>
             <option value=''>Seleccione…</option>
             {categoriasActivas.map((c) => (
-              <option
-                key={c.categoria_id}
-                value={c.categoria_id}>
+              <option key={c.categoria_id} value={c.categoria_id}>
                 {c.nombre}
               </option>
             ))}
@@ -346,10 +357,7 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
                       viewBox='0 0 24 24'
                       fill='none'
                       stroke='currentColor'>
-                      <path
-                        strokeWidth='2'
-                        d='M12 5v14m-7-7h14'
-                      />
+                      <path strokeWidth='2' d='M12 5v14m-7-7h14' />
                     </svg>
                     <span className='text-xs'>Arrastra tu imagen aquí o haz clic para seleccionar</span>
                   </div>
@@ -368,10 +376,7 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
 
             <div className='md:col-span-4'>
               <div className='flex flex-col justify-between h-full gap-3'>
-                <Button
-                  onClick={openPicker}
-                  color='info'
-                  className='w-full'>
+                <Button onClick={openPicker} color='info' className='w-full'>
                   Seleccionar imagen
                 </Button>
 
@@ -391,11 +396,7 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
                 </Button>
 
                 {editProdId && (
-                  <Button
-                    type='button'
-                    onClick={resetFormProd}
-                    color='peligro'
-                    className='w-full border'>
+                  <Button type='button' onClick={resetFormProd} color='peligro' className='w-full border'>
                     Cancelar
                   </Button>
                 )}
@@ -424,17 +425,13 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
           <tbody className='bg-white divide-y divide-gray-200'>
             {productos.length === 0 ? (
               <tr>
-                <td
-                  colSpan='5'
-                  className='text-center py-4 text-sm text-gray-500'>
+                <td colSpan='5' className='text-center py-4 text-sm text-gray-500'>
                   {showDisabledProd ? 'No hay productos registrados.' : 'No hay productos activos.'}
                 </td>
               </tr>
             ) : (
               productos.map((p) => (
-                <tr
-                  key={p.producto_id}
-                  className={`hover:bg-gray-50 ${p.estado === false ? 'opacity-70' : ''}`}>
+                <tr key={p.producto_id} className={`hover:bg-gray-50 ${p.estado === false ? 'opacity-70' : ''}`}>
                   <td className='px-4 py-2 text-sm text-gray-900'>{p.nombre}</td>
                   <td className='px-4 py-2 text-sm text-gray-700'>{p.categoria_nombre || p.categoria_id || '—'}</td>
                   <td className='px-4 py-2 text-sm text-gray-700'>{p.precio_base || '—'}</td>
@@ -477,3 +474,6 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [] }, ref) => {
     </section>
   );
 });
+
+
+

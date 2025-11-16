@@ -1,8 +1,13 @@
-// utils/session.js
-
 /**
- * Guarda tokens y usuario en storage.
- * @param {{ access_token?: string, refresh_token?: string, user?: any }} param0
+ * Guarda tokens y usuario actual en storage de Punto Sabor.
+ *
+ * @param {{ access_token?: string, refresh_token?: string, user?: any }} params Payload recibido desde la API de autenticacion.
+ * @returns {void}
+ * @example
+ * ```js
+ * setSession({ access_token, refresh_token, user });
+ * ```
+ * @remarks Dispara el evento global `auth:login` para que el router y los hooks reaccionen.
  */
 export function setSession({ access_token, refresh_token, user }) {
   if (access_token) localStorage.setItem('accessToken', access_token);
@@ -10,7 +15,6 @@ export function setSession({ access_token, refresh_token, user }) {
 
   if (user) {
     const norm = normalizeUserForStore(user);
-    // Guardamos crudo por compatibilidad y normalizado para consumo interno
     localStorage.setItem('userData', JSON.stringify(user));
     localStorage.setItem('currentUser', JSON.stringify(norm));
     localStorage.setItem(
@@ -22,22 +26,37 @@ export function setSession({ access_token, refresh_token, user }) {
     );
   }
 
-  // opcional: notificar login
   try {
     window.dispatchEvent(new CustomEvent('auth:login'));
   } catch {}
 }
 
 /**
- * Actualiza tokens sin tocar el usuario (útil tras /refresh).
- * @param {{access?: string, refresh?: string}} param0
+ * Actualiza los tokens persistidos sin modificar la informacion del usuario.
+ *
+ * @param {{access?: string, refresh?: string}} params Tokens emitidos por `/refresh`.
+ * @returns {void}
+ * @example
+ * ```js
+ * setTokens({ access, refresh });
+ * ```
+ * @remarks Solo sobreescribe los valores recibidos; deja intactos los demas.
  */
 export function setTokens({ access, refresh }) {
   if (access) localStorage.setItem('accessToken', access);
   if (refresh) localStorage.setItem('refreshToken', refresh);
 }
 
-/** Elimina toda la sesión y emite un evento global. */
+/**
+ * Limpia por completo la sesion almacenada.
+ *
+ * @returns {void}
+ * @example
+ * ```js
+ * clearSession();
+ * ```
+ * @remarks Elimina tokens y usuario, luego emite `auth:logout` para que la app redirija.
+ */
 export function clearSession() {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
@@ -45,24 +64,42 @@ export function clearSession() {
   localStorage.removeItem('auth');
   localStorage.removeItem('currentUser');
 
-  // Notifica a la app (router/context) que perdió sesión
   try {
     window.dispatchEvent(new CustomEvent('auth:logout'));
   } catch {}
 }
 
-/** Acceso directo al access token. */
+/**
+ * Obtiene el access token persistido.
+ *
+ * @returns {string|null} Cadena JWT o `null` si no existe.
+ * @example
+ * ```js
+ * const token = getAccessToken();
+ * ```
+ * @remarks Se usa antes de llamar a la API para adjuntar el Bearer header.
+ */
 export function getAccessToken() {
   return localStorage.getItem('accessToken') || null;
 }
 
-/** Acceso directo al refresh token. */
+/**
+ * Obtiene el refresh token persistido.
+ *
+ * @returns {string|null} Cadena JWT o `null`.
+ * @example
+ * ```js
+ * const refresh = getRefreshToken();
+ * ```
+ * @remarks Solo lo utilizan los flujos de refresh dentro del cliente HTTP.
+ */
 export function getRefreshToken() {
   return localStorage.getItem('refreshToken') || null;
 }
 
 /**
  * Devuelve el usuario normalizado desde storage.
+ *
  * @returns {{
  *  id: number|null,
  *  usuario_id: number|null,
@@ -73,8 +110,16 @@ export function getRefreshToken() {
  *  rol_id: number|null,
  *  rol_nombre: string,
  *  rol_key: string,
- *  avatar: string
- * } | null}
+ *  avatar: string,
+ *  empresa_id: number|null,
+ *  empresa_nombre: string,
+ *  sucursales_ids: number[]
+ * } | null} Usuario listo para usar en la UI.
+ * @example
+ * ```js
+ * const currentUser = getCurrentUser();
+ * ```
+ * @remarks Si encuentra un usuario no normalizado, lo transforma en caliente.
  */
 export function getCurrentUser() {
   const raw =
@@ -82,7 +127,6 @@ export function getCurrentUser() {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
-    // Si viene de userData (no normalizado), lo normalizamos al vuelo
     if (!parsed?.rol_key) return normalizeUserForStore(parsed);
     return parsed;
   } catch {
@@ -90,20 +134,30 @@ export function getCurrentUser() {
   }
 }
 
-/** Alias de compatibilidad con código antiguo. */
+/**
+ * Alias de compatibilidad para codigo legado que leía `getStoredUser`.
+ *
+ * @example
+ * ```js
+ * const user = getStoredUser();
+ * ```
+ * @remarks Referencia directa a `getCurrentUser`.
+ */
 export const getStoredUser = getCurrentUser;
 
 /* ===================== helpers internos ===================== */
 
-/** Devuelve el primer valor definido y no vacío. */
+/** Devuelve el primer valor definido y no vacio. */
 function firstDefined(arr) {
   return arr?.find((v) => v !== undefined && v !== null && v !== '') ?? null;
 }
 
 /**
- * Normaliza el usuario para guardarlo en currentUser:
- * - asegura id/usuario_id
- * - crea rol_key (rol en lowercase) para comparar fácil
+ * Normaliza el usuario para guardarlo en `currentUser`.
+ *
+ * @param {any} u Objeto de usuario tal como lo entrega la API.
+ * @returns {any} Usuario consistente para la UI local.
+ * @remarks Asegura `id/usuario_id` y crea `rol_key` (rol en lowercase) para comparar facil.
  */
 function normalizeUserForStore(u) {
   const role =
@@ -122,11 +176,9 @@ function normalizeUserForStore(u) {
       ? role
       : null;
 
-  // id unificado
   const idCandidates = [u.id, u.usuario_id, u.user_id, u.usuarioId, u.userId];
   const id = firstDefined(idCandidates);
 
-  // rol_id: permite que el backend envíe 1/2/3 o un objeto
   const roleIdCandidates = [
     u.rol_id,
     u.role_id,
@@ -138,7 +190,6 @@ function normalizeUserForStore(u) {
   const roleIdRaw = firstDefined(roleIdCandidates);
   const rol_id = roleIdRaw != null ? Number(roleIdRaw) : null;
 
-  // rol_nombre: SOLO strings; evitamos meter números como nombre
   const roleNameCandidates = [
     u.rol_nombre,
     u.role_name,
@@ -151,7 +202,6 @@ function normalizeUserForStore(u) {
   ];
   const rol_nombre = String(firstDefined(roleNameCandidates) || '').trim();
 
-  // clave de rol para comparaciones rápidas (nombre en lowercase o id como string)
   const rol_key = rol_nombre
     ? String(rol_nombre).toLowerCase()
     : rol_id != null
@@ -169,5 +219,37 @@ function normalizeUserForStore(u) {
     rol_nombre,
     rol_key,
     avatar: u.avatar ?? u.profile_image ?? u.image ?? '',
+    empresa_id:
+      firstDefined([
+        u.empresa_id,
+        u.company_id,
+        u.empresa?.id,
+        u.company?.id,
+      ]) ?? null,
+    empresa_nombre:
+      firstDefined([
+        u.empresa_nombre,
+        u.company_name,
+        u.empresa?.nombre,
+        u.company?.nombre,
+      ]) ?? '',
+    sucursales_ids: (Array.isArray(u.sucursales ?? u.sucursales_ids)
+      ? (u.sucursales ?? u.sucursales_ids)
+      : []
+    )
+      .map((value) => {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+          const parsed = Number(value);
+          return Number.isFinite(parsed) ? parsed : null;
+        }
+        if (typeof value === 'object') {
+          const candidate = value?.id ?? value?.sucursal_id ?? value?.sucursalId ?? null;
+          const parsed = Number(candidate);
+          return Number.isFinite(parsed) ? parsed : null;
+        }
+        return null;
+      })
+      .filter((value) => value != null),
   };
 }

@@ -1,9 +1,8 @@
-// hooks/useCurrentUser.js
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { apiFoodTrucks } from '../utils/api';
 import { getCurrentUser } from '../utils/session';
 
-// normaliza campos desde distintas formas posibles
+// Normaliza campos desde distintas formas posibles.
 function mapUser(u) {
   if (!u) return null;
   return {
@@ -15,15 +14,42 @@ function mapUser(u) {
     sucursal_id: u.sucursal_id ?? null,
     sucursal_nombre: u.sucursal_nombre ?? '',
     avatar: u.avatar ?? '',
-    // por si más adelante quieres todo el objeto crudo
-    _raw: u,
+    empresa_id: u.empresa_id ?? u.company_id ?? null,
+    empresa_nombre: u.empresa_nombre ?? u.company_name ?? '',
+    sucursales_ids: Array.isArray(u.sucursales_ids ?? u.sucursales)
+      ? (u.sucursales_ids ?? u.sucursales).map((value) => {
+          if (typeof value === 'number') return value;
+          if (typeof value === 'string') {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+          }
+          if (typeof value === 'object') {
+            const candidate = value?.id ?? value?.sucursal_id ?? value?.sucursalId ?? null;
+            const parsed = Number(candidate);
+            return Number.isFinite(parsed) ? parsed : null;
+          }
+          return null;
+        }).filter((value) => value != null)
+      : [],
+    _raw: u, // conserva el payload original para depurar.
   };
 }
 
 /**
- * Lee el usuario logueado desde localStorage.
- * Si faltan `rol_nombre` o `nombre_completo`, intenta refrescar desde la API:
- *   GET v1/usuarios/  (y matchea por id o email)
+ * Obtiene y mantiene sincronizado el usuario autenticado desde storage y la API de Punto Sabor.
+ *
+ * @param {{refreshFromApiIfIncomplete?: boolean}} [options] Controla si se reconsulta
+ * la API via `GET v1/usuarios/` cuando faltan datos criticos en cache.
+ * @returns {{user: ReturnType<typeof mapUser>, loadingUser: boolean, errorUser: string, setUser: import('react').Dispatch<import('react').SetStateAction<ReturnType<typeof mapUser>>>}}
+ * Estado y setters para consumir informacion del usuario actual en componentes React.
+ * @example
+ * ```jsx
+ * const { user, loadingUser } = useCurrentUser();
+ * if (loadingUser) return <Spinner />;
+ * return <span>{user?.nombre_completo}</span>;
+ * ```
+ * @remarks Primero lee desde `localStorage` y, si faltan `rol_nombre` o `nombre_completo`,
+ * sincroniza contra la API de Punto Sabor para mantener los datos consistentes.
  */
 export function useCurrentUser({ refreshFromApiIfIncomplete = true } = {}) {
   const [user, setUser] = useState(null);
@@ -35,11 +61,9 @@ export function useCurrentUser({ refreshFromApiIfIncomplete = true } = {}) {
       setLoadingUser(true);
       setErrorUser('');
       try {
-        // 1) desde storage
         const stored = mapUser(getCurrentUser());
         setUser(stored);
 
-        // 2) refresco opcional si faltan datos críticos
         const needsRefresh =
           refreshFromApiIfIncomplete &&
           (!stored?.rol_nombre || !stored?.nombre_completo);
@@ -65,15 +89,13 @@ export function useCurrentUser({ refreshFromApiIfIncomplete = true } = {}) {
             const storedEmail = String(stored.email).trim().toLowerCase();
             match = list.find(
               (u) =>
-                String(u.email ?? u.correo ?? '')
-                  .trim()
-                  .toLowerCase() === storedEmail
+                String(u.email ?? u.correo ?? '').trim().toLowerCase() ===
+                storedEmail
             );
           }
           if (match) {
             const mapped = mapUser(match);
             setUser(mapped);
-            // opcional: re-grabar currentUser completo
             localStorage.setItem('currentUser', JSON.stringify(match));
           }
         }
@@ -87,3 +109,8 @@ export function useCurrentUser({ refreshFromApiIfIncomplete = true } = {}) {
 
   return { user, loadingUser, errorUser, setUser };
 }
+
+
+
+
+

@@ -1,5 +1,4 @@
-// src/pages/Administrador.jsx
-import { useMemo, useRef, useState, useEffect } from 'react';
+﻿import { useMemo, useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/logo/Logo';
 import { UserMenu } from '../components/sesion_usuario/UserMenu';
@@ -11,25 +10,42 @@ import { PanelProductos } from '../components/paneles/PanelProductos';
 import { PendingSyncTable } from '../components/sync/PendingSyncTable';
 import { Button } from '../components/ui/Button';
 import { PanelUsuarios } from '../components/paneles/PanelUsuarios';
+import { PanelSucursales } from '../components/paneles/PanelSucursales';
+import { PiUserCirclePlusFill } from 'react-icons/pi';
+import { TbCategoryPlus } from 'react-icons/tb';
+import { AiOutlineProduct } from 'react-icons/ai';
+import { sucursalesRepo } from '../utils/repoSucursales';
+import { FaCheckCircle } from 'react-icons/fa';
+import { EMPRESA_PUNTO_SABOR_ID, perteneceAEmpresa, getEmpresaIdFromUser } from '../utils/empresas';
+import { FoodtruckIcon } from '../components/ui/Iconos';
 
 const quickActions = [
   {
     id: 'usuarios',
-    title: 'Creación de usuarios',
+    title: 'Administrar usuarios',
     description: 'Da de alta supervisores, vendedores o nuevos administradores y define sus permisos.',
-    cta: 'Nuevo usuario',
+    cta: 'Gestionar usuarios',
+    icon: PiUserCirclePlusFill,
+    className: 'text-secundario',
+    btnColor: 'secundario',
   },
   {
     id: 'categorias',
     title: 'Administrar categorías',
     description: 'Crea, edita, desactiva y elimina categorías de productos.',
     cta: 'Gestionar categorías',
+    icon: TbCategoryPlus,
+    className: 'text-info',
+    btnColor: 'info',
   },
   {
     id: 'productos',
     title: 'Administrar productos',
     description: 'Crea, edita, sube imágenes y controla disponibilidad de productos.',
     cta: 'Gestionar productos',
+    icon: AiOutlineProduct,
+    className: 'text-primario',
+    btnColor: 'primario',
   },
 ];
 
@@ -54,119 +70,44 @@ const metricHighlights = [
   },
 ];
 
-const truckPerformance = [
-  {
-    id: 'central',
-    name: 'Foodtruck Central',
-    ventas: '$3.2M',
-    pedidos: 482,
-    trend: '+5% semanal',
-  },
-  {
-    id: 'costanera',
-    name: 'Costanera Grill',
-    ventas: '$2.6M',
-    pedidos: 401,
-    trend: '+2% semanal',
-  },
-  {
-    id: 'nocturno',
-    name: 'Nocturno Urbano',
-    ventas: '$1.8M',
-    pedidos: 310,
-    trend: '-1% semanal',
-  },
-];
+const QuickActionCard = ({ action, onClick }) => {
+  const Icon = action?.icon;
 
-const teamAssignments = [
-  {
-    id: 'central-team',
-    truck: 'Foodtruck Central',
-    supervisor: 'Ana Torres',
-    colaboradores: 6,
-    vacantes: 1,
-  },
-  {
-    id: 'costanera-team',
-    truck: 'Costanera Grill',
-    supervisor: 'Luis Pizarro',
-    colaboradores: 5,
-    vacantes: 0,
-  },
-  {
-    id: 'nocturno-team',
-    truck: 'Nocturno Urbano',
-    supervisor: 'Marcela Rivas',
-    colaboradores: 4,
-    vacantes: 2,
-  },
-];
-
-const QuickActionCard = ({ action, onClick }) => (
-  <article className='flex flex-col justify-between rounded-2xl bg-elemento p-6 shadow-sm ring-1 ring-black/5'>
-    <div>
-      <h3 className='text-lg font-semibold text-texto'>{action.title}</h3>
-      <p className='mt-2 text-sm text-gray-600'>{action.description}</p>
-    </div>
-    <div className='mt-6'>
-      <Button
-        color='primario'
-        onClick={() => onClick?.(action.id)}>
-        {action.cta}
-      </Button>
-    </div>
-  </article>
-);
+  return (
+    <article className='flex flex-col justify-between items-center rounded-2xl bg-elemento p-6 shadow-sm ring-1 ring-black/5'>
+      <div className='flex flex-col items-center'>
+        <Icon className={`h-30 w-30 mb-4 ${action.className ?? 'text-primario'}`} />
+        <h3 className='text-lg font-semibold text-texto'>{action.title}</h3>
+        <p className='mt-2 text-sm text-gray-600 text-pretty'>{action.description}</p>
+      </div>
+      <div className='mt-6'>
+        <Button color={action.btnColor ?? 'primario'} onClick={() => onClick?.(action.id)}>
+          {action.cta}
+        </Button>
+      </div>
+    </article>
+  );
+};
 
 const MetricCard = ({ metric }) => (
-  <div className='rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5'>
-    <p className='text-xs uppercase tracking-wide text-gray-500'>{metric.label}</p>
-    <p className='mt-2 text-2xl font-semibold text-texto'>{metric.value}</p>
+  <div className='rounded-2xl bg-elemento p-5 shadow-md ring-1 ring-placeholder'>
+    <p className='text-xs uppercase tracking-wide'>{metric.label}</p>
+    <p className='mt-2 text-2xl font-semibold'>{metric.value}</p>
     <p className='text-xs font-medium text-primario'>{metric.detail}</p>
-  </div>
-);
-
-const TruckSummary = ({ truck }) => (
-  <div className='flex items-center justify-between rounded-xl border border-gray-200 bg-elemento px-4 py-3'>
-    <div>
-      <p className='text-sm font-semibold text-texto'>{truck.name}</p>
-      <p className='text-xs text-gray-500'>{truck.pedidos} pedidos</p>
-    </div>
-    <div className='text-right'>
-      <p className='text-lg font-semibold text-primario'>{truck.ventas}</p>
-      <span className='text-xs text-gray-600'>{truck.trend}</span>
-    </div>
-  </div>
-);
-
-const TeamCard = ({ team }) => (
-  <div className='rounded-2xl border border-dashed border-gray-300 bg-white p-4'>
-    <div className='flex items-center justify-between'>
-      <div>
-        <p className='text-sm font-semibold text-texto'>{team.truck}</p>
-        <p className='text-xs text-gray-500'>Supervisor: {team.supervisor}</p>
-      </div>
-      <Button
-        color='info'
-        size='sm'>
-        Ver equipo
-      </Button>
-    </div>
-    <div className='mt-3 flex gap-6 text-xs text-gray-600'>
-      <span>{team.colaboradores} colaboradores</span>
-      <span>{team.vacantes} vacantes</span>
-    </div>
   </div>
 );
 
 export const Administrador = () => {
   const navigate = useNavigate();
-  const { user } = useCurrentUser();
+  const { user, setUser } = useCurrentUser();
 
   const [categoriasActivas, setCategoriasActivas] = useState([]);
-  const [openPanel, setOpenPanel] = useState(null); // 'usuarios' | 'categorias' | 'productos' | null
+  const [openPanel, setOpenPanel] = useState(null);
+  const [sucursalesDisponibles, setSucursalesDisponibles] = useState([]);
+  const [loadingSucursales, setLoadingSucursales] = useState(true);
+  const [errorSucursales, setErrorSucursales] = useState('');
+  const [selectedSucursalId, setSelectedSucursalId] = useState('');
 
-  // refs para hacer scroll suave al desplegar
   const usuariosRef = useRef(null);
   const categoriasRef = useRef(null);
   const productosRef = useRef(null);
@@ -182,25 +123,107 @@ export const Administrador = () => {
   }, [user]);
 
   const isAdmin = (sessionUser?.rol_id ?? sessionUser?.rolId) === 1;
-  const empresaId = sessionUser?.empresa_id ?? sessionUser?.empresaId ?? undefined;
-  const sucursalId = sessionUser?.sucursal_id ?? sessionUser?.sucursalId ?? undefined;
-  const sucursalNombre = sessionUser?.sucursal_nombre ?? sessionUser?.sucursalNombre ?? 'Sucursal sin asignar';
+  const empresaId = getEmpresaIdFromUser(sessionUser) ?? undefined;
+  const sessionSucursalId = sessionUser?.sucursal_id ?? sessionUser?.sucursalId ?? '';
+  const COLOR_CYCLE = ['text-secundario', 'text-primario', 'text-info'];
+
+  const getFoodtruckColor = (index) => {
+    return COLOR_CYCLE[index % COLOR_CYCLE.length];
+  };
+
+  useEffect(() => {
+    if (!sessionUser) return;
+    if (!perteneceAEmpresa(sessionUser, [EMPRESA_PUNTO_SABOR_ID])) {
+      navigate('/403', { replace: true });
+    }
+  }, [sessionUser, navigate]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setSucursalesDisponibles([]);
+      setSelectedSucursalId('');
+      setErrorSucursales('');
+      setLoadingSucursales(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingSucursales(true);
+    setErrorSucursales('');
+
+    (async () => {
+      try {
+        const list = await sucursalesRepo.list({ empresaId });
+        if (!cancelled) {
+          setSucursalesDisponibles(list);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSucursalesDisponibles([]);
+          setErrorSucursales(err?.message ?? 'No pudimos cargar los foodtrucks disponibles.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingSucursales(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [empresaId, isAdmin]);
+
+  useEffect(() => {
+    if (!sucursalesDisponibles.length) {
+      if (selectedSucursalId) setSelectedSucursalId('');
+      return;
+    }
+
+    if (selectedSucursalId && sucursalesDisponibles.some((s) => Number(s.id) === Number(selectedSucursalId))) {
+      return;
+    }
+
+    if (sessionSucursalId && sucursalesDisponibles.some((s) => Number(s.id) === Number(sessionSucursalId))) {
+      setSelectedSucursalId(String(sessionSucursalId));
+      return;
+    }
+
+    if (sucursalesDisponibles.length === 1) {
+      setSelectedSucursalId(String(sucursalesDisponibles[0].id));
+    }
+  }, [sucursalesDisponibles, sessionSucursalId, selectedSucursalId]);
+
+  const selectedSucursal = useMemo(() => {
+    if (!selectedSucursalId) return null;
+    return sucursalesDisponibles.find((s) => Number(s.id) === Number(selectedSucursalId)) ?? null;
+  }, [selectedSucursalId, sucursalesDisponibles]);
+
+  const sucursalId = selectedSucursal ? Number(selectedSucursal.id) : undefined;
+  const sucursalNombre = selectedSucursal?.nombre ?? 'Selecciona un foodtruck';
+  const hasSucursalSeleccionada = Boolean(selectedSucursal);
 
   const logout = () => {
     clearSession();
     navigate('/login', { replace: true });
   };
 
-  // scroll al abrir un panel
   useEffect(() => {
     const map = {
       usuarios: usuariosRef,
       categorias: categoriasRef,
       productos: productosRef,
     };
-    const r = map[openPanel]?.current;
+    const r = openPanel ? map[openPanel]?.current : null;
     if (r) r.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [openPanel]);
+
+  useEffect(() => {
+    setCategoriasActivas([]);
+    if (!sucursalId) {
+      setOpenPanel(null);
+    }
+  }, [sucursalId]);
 
   const handleQuickAction = (id) => {
     setOpenPanel((curr) => (curr === id ? null : id));
@@ -211,115 +234,180 @@ export const Administrador = () => {
       <header className='bg-elemento shadow-md flex justify-center'>
         <div className='max-w-6xl w-full flex items-center justify-between px-4 py-3'>
           <Logo className='h-10 w-10' />
-          <UserMenu
-            user={user}
-            onLogout={logout}
-          />
+          <UserMenu user={user} onLogout={logout} />
         </div>
       </header>
 
       <main className='mx-auto max-w-6xl px-4 pt-10 space-y-12'>
         <EstadoEnLinea className='pt-4' />
 
-        <div className=''>
-          <h1 className='text-2xl font-black text-texto tracking-wide'>Controla tu operación completa</h1>
+        <div className='space-y-2'>
+          <h1 className='text-2xl font-black tracking-wide'>Centro de administración</h1>
+          <div className='border-b border-placeholder'></div>
           <p className='text-lg font-medium'>
-            Configura accesos, administra foodtrucks y revisa la salud de ventas desde un mismo lugar.
+            Observa las métricas generales y administra tus foodtrucks desde un mismo lugar.
           </p>
         </div>
 
-        {/* Acciones rápidas */}
-        <section>
-          <h2 className='text-xl font-semibold text-texto mb-4'>Acciones rápidas</h2>
-          <div className='grid gap-6 md:grid-cols-3'>
-            {quickActions.map((action) => (
-              <QuickActionCard
-                key={action.id}
-                action={action}
-                onClick={handleQuickAction}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* Panel: Usuarios (colapsable) */}
-        <section ref={usuariosRef}>
-          {openPanel === 'usuarios' && (
-            <div className='mt-2'>
-              <PanelUsuarios
-                empresaId={empresaId}
-                sucursalId={sucursalId}
-                isAdmin={isAdmin}
-              />
-            </div>
-          )}
-        </section>
-
-        {/* Panel: Categorías (colapsable, sin tocar el componente) */}
-        <section ref={categoriasRef}>
-          {openPanel === 'categorias' && (
-            <div className='mt-2'>
-              <PanelCategorias
-                sucursalId={sucursalId}
-                sucursalNombre={sucursalNombre}
-                onAvailableChange={(activas) => setCategoriasActivas(activas)}
-              />
-            </div>
-          )}
-        </section>
-
-        {/* Panel: Productos (colapsable, sin tocar el componente) */}
-        <section ref={productosRef}>
-          {openPanel === 'productos' && (
-            <div className='mt-2'>
-              <PanelProductos categoriasActivas={categoriasActivas} />
-            </div>
-          )}
-        </section>
-
-        {/* Métricas / Rendimiento */}
-        <section className='grid gap-8 lg:grid-cols-2'>
-          <div className='space-y-4'>
-            <h2 className='text-xl font-semibold text-texto'>Métricas de ventas</h2>
-            <div className='grid gap-4 sm:grid-cols-2'>
-              {metricHighlights.map((metric) => (
-                <MetricCard
-                  key={metric.id}
-                  metric={metric}
-                />
-              ))}
-            </div>
-          </div>
-          <div className='space-y-4'>
-            <h2 className='text-xl font-semibold text-texto'>Rendimiento por foodtruck</h2>
-            <div className='space-y-3'>
-              {truckPerformance.map((truck) => (
-                <TruckSummary
-                  key={truck.id}
-                  truck={truck}
-                />
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Equipos (lo mantenemos igual) */}
         <section className='space-y-4'>
-          <div className='flex items-center justify-between'>
-            <div>
-              <h2 className='text-xl font-semibold text-texto'>Equipos por foodtruck</h2>
-              <p className='text-sm text-gray-600'>Controla colaboradores activos y vacantes abiertas.</p>
-            </div>
-            <Button color='primario'>Administrar trabajadores</Button>
+          <div>
+            <h2 className='text-xl font-semibold text-texto'>Métricas generales</h2>
+            <p className='text-gray-600'>Indicadores base para monitorear el desempeño tus foodtrucks.</p>
           </div>
-          <div className='grid gap-4 md:grid-cols-3'>
-            {teamAssignments.map((team) => (
-              <div key={team.id}>
-                <TeamCard team={team} />
-              </div>
+          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
+            {metricHighlights.map((metric) => (
+              <MetricCard key={metric.id} metric={metric} />
             ))}
           </div>
         </section>
+
+        <section className='space-y-6 mt-20'>
+          <div>
+            <h2 className='text-xl font-semibold'>Crea y selecciona tus sucursales</h2>
+            <p className='text-sm text-texto-suave'>
+              Primero define la sucursal a gestionar para habilitar los demás paneles.
+            </p>
+          </div>
+
+          <div className='rounded-3xl bg-elemento p-6 shadow-md shadow-placeholder space-y-4'>
+            <div className='flex flex-wrap items-start justify-between gap-4'>
+              <div>
+                <p className='text-xl font-semibold'>Selecciona el foodtruck que deseas administrar</p>
+                <p className='text-sm text-texto-suave'>
+                  Elige uno de tus foodtrucks para gestionar usuarios, categorías y productos.
+                </p>
+              </div>
+            </div>
+
+            <div className='grid gap-4 md:grid-cols-[2fr,1fr] '>
+              <div>
+                {loadingSucursales ? (
+                  <p className='text-sm text-texto-suave'>Cargando foodtrucks disponibles...</p>
+                ) : sucursalesDisponibles.length === 0 ? (
+                  <p className='text-sm text-texto-suave'>Todavía no registras foodtrucks para esta empresa.</p>
+                ) : (
+                  <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
+                    {[...sucursalesDisponibles]
+                      .filter((s) => s.id != null)
+                      .sort((a, b) => Number(a.id) - Number(b.id))
+                      .map((sucursal, index) => {
+                        const isSelected = String(selectedSucursalId) === String(sucursal.id);
+                        const color = getFoodtruckColor(index);
+
+                        return (
+                          <button
+                            key={sucursal.id}
+                            type='button'
+                            disabled={loadingSucursales}
+                            onClick={() => setSelectedSucursalId(String(sucursal.id))}
+                            className={[
+                              'relative group flex flex-col items-center text-center rounded-2xl border px-4 py-3 shadow-sm transition-all duration-200 cursor-pointer',
+                              isSelected ? 'border-info bg-info/5' : 'border-placeholder bg-elemento',
+                              loadingSucursales ? 'opacity-60 cursor-not-allowed' : '',
+                            ].join(' ')}>
+                            {isSelected && <FaCheckCircle className='absolute top-2 right-2 text-info h-5 w-5' />}
+
+                            <div className='flex flex-col justify-center items-center gap-3'>
+                              <FoodtruckIcon className={`h-20 w-20 ${color}`} />
+                              <div className='border-b border-placeholder w-full' />
+                              <p className='text-2xl font-semibold text-pretty mt-3'>{sucursal.nombre}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {errorSucursales && <p className='text-sm text-peligro'>{errorSucursales}</p>}
+          </div>
+
+          <PanelSucursales
+            empresaId={empresaId}
+            isAdmin={isAdmin}
+            adminUser={sessionUser}
+            onAdminUpdated={(updatedAdmin) => {
+              if (!updatedAdmin || !setUser) return;
+              setUser((prev) => {
+                const next = {
+                  ...(prev ?? {}),
+                  ...updatedAdmin,
+                  sucursales_ids: updatedAdmin.sucursales_ids ?? prev?.sucursales_ids ?? [],
+                  _raw: {
+                    ...(prev?._raw ?? {}),
+                    ...updatedAdmin,
+                  },
+                };
+                try {
+                  localStorage.setItem('currentUser', JSON.stringify(next));
+                } catch {}
+                return next;
+              });
+            }}
+            onSucursalesUpdated={async () => {
+              try {
+                const list = await sucursalesRepo.list({ empresaId });
+                setSucursalesDisponibles(list);
+              } catch (err) {
+                setSucursalesDisponibles([]);
+                setErrorSucursales(err?.message ?? 'No pudimos cargar los foodtrucks disponibles.');
+              }
+            }}
+          />
+
+          {!hasSucursalSeleccionada && (
+            <div className='rounded-2xl border border-dashed border-info bg-drag/10 px-6 py-4 text-center text-sm text-texto-suave'>
+              Crea o selecciona un foodtruck para obtener acceso a usuarios, categorías y productos.
+            </div>
+          )}
+        </section>
+
+        {hasSucursalSeleccionada && (
+          <section className='space-y-12'>
+            <div>
+              <h2 className='text-xl font-semibold mb-4'>Acciones rápidas</h2>
+              <div className='grid gap-6 md:grid-cols-3'>
+                {quickActions.map((action) => (
+                  <QuickActionCard key={action.id} action={action} onClick={handleQuickAction} />
+                ))}
+              </div>
+            </div>
+
+            <section ref={usuariosRef}>
+              {openPanel === 'usuarios' && (
+                <div className='mt-2'>
+                  <PanelUsuarios
+                    empresaId={empresaId}
+                    sucursalId={sucursalId}
+                    isAdmin={isAdmin}
+                    onClose={() => setOpenPanel(null)}
+                  />
+                </div>
+              )}
+            </section>
+
+            <section ref={categoriasRef}>
+              {openPanel === 'categorias' && (
+                <div className='mt-2'>
+                  <PanelCategorias
+                    sucursalId={sucursalId}
+                    sucursalNombre={sucursalNombre}
+                    onAvailableChange={(activas) => setCategoriasActivas(activas)}
+                  />
+                </div>
+              )}
+            </section>
+
+            <section ref={productosRef}>
+              {openPanel === 'productos' && (
+                <div className='mt-2'>
+                  <PanelProductos categoriasActivas={categoriasActivas} sucursalId={sucursalId} />
+                </div>
+              )}
+            </section>
+          </section>
+        )}
 
         <PendingSyncTable />
       </main>

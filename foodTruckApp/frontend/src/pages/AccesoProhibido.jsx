@@ -1,8 +1,15 @@
 import { useNavigate } from 'react-router-dom';
+import { clearSession } from '../utils/session';
 export default function ForbiddenAccessPage() {
   const navigate = useNavigate();
 
   const goLogin = () => {
+    try {
+      clearSession();
+    } catch {
+      // fallback to client-side cleanup
+      localStorage.clear();
+    }
     navigate('/login', { replace: true });
   };
 

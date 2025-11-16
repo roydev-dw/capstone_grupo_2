@@ -13,6 +13,7 @@ import RutaPublica from './routes/RutaPublica';
 import AccesoProhibido from './pages/AccesoProhibido';
 import { initSyncManager, resetSyncManager } from './utils/syncManager';
 import { getAccessToken } from './utils/session';
+import { EMPRESA_PUNTO_SABOR_ID } from './utils/empresas';
 
 import '@fontsource/luckiest-guy';
 import '@fontsource/poppins/400.css';
@@ -37,7 +38,6 @@ const AppRouter = () => {
     };
 
     const onLogout = () => {
-      console.log('[auth:logout] disparado -> redirect /login');
       resetSyncManager();
       localStorage.clear();
       window.location.replace('/login');
@@ -84,6 +84,7 @@ const AppRouter = () => {
           element={
             <RutaProtegida
               allow={['vendedor', 'supervisor', 'administrador']}
+              allowCompanies={[EMPRESA_PUNTO_SABOR_ID]}
               forbiddenTo='/403'>
               <Vendedor />
             </RutaProtegida>
@@ -94,6 +95,7 @@ const AppRouter = () => {
           element={
             <RutaProtegida
               allow={['supervisor', 'administrador']}
+              allowCompanies={[EMPRESA_PUNTO_SABOR_ID]}
               forbiddenTo='/403'>
               <Supervisor />
             </RutaProtegida>
@@ -103,7 +105,8 @@ const AppRouter = () => {
           path='/panel'
           element={
             <RutaProtegida
-              allow={['supervisor', 'administrador']}
+              allow={['supervisor']}
+              allowCompanies={[EMPRESA_PUNTO_SABOR_ID]}
               forbiddenTo='/403'>
               <PanelOperaciones />
             </RutaProtegida>
@@ -114,6 +117,7 @@ const AppRouter = () => {
           element={
             <RutaProtegida
               allow={['administrador']}
+              allowCompanies={[EMPRESA_PUNTO_SABOR_ID]}
               forbiddenTo='/403'>
               <Administrador />
             </RutaProtegida>

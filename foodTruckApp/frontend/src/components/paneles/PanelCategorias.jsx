@@ -1,4 +1,4 @@
-// src/components/supervisor/CategoriasPanel.jsx
+﻿// src/components/supervisor/CategoriasPanel.jsx
 import { useEffect, useState } from 'react';
 import { categoriasRepo } from '../../utils/repoCategorias';
 import { toast } from 'react-hot-toast';
@@ -26,7 +26,13 @@ export const PanelCategorias = ({
   const [errorMsg, setErrorMsg] = useState('');
 
   const cargarCategorias = async () => {
-    const { items, source } = await categoriasRepo.listAll();
+    if (!sucursalId) {
+      setCategorias([]);
+      setCatSource('selecciona');
+      if (onAvailableChange) onAvailableChange([]);
+      return;
+    }
+    const { items, source } = await categoriasRepo.listAll({ sucursalId });
     const filtradas = items.filter((c) => (showDisabled ? true : c.estado !== false));
 
     setCategorias(filtradas);
@@ -44,13 +50,13 @@ export const PanelCategorias = ({
       try {
         await cargarCategorias();
       } catch (err) {
-        setErrorMsg(err?.message ?? 'Error cargando categorías');
+        setErrorMsg(err?.message ?? 'Error cargando categorÃ­as');
       } finally {
         setLoading(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showDisabled]);
+  }, [showDisabled, sucursalId]);
 
   const resetForm = () => {
     setEditId(null);
@@ -76,7 +82,7 @@ export const PanelCategorias = ({
           descripcion: form.descripcion,
           estado: form.estado,
         });
-        toast.success(`Categoría “${nombre}” actualizada`);
+        toast.success(`CategorÃ­a â€œ${nombre}â€ actualizada`);
       } else {
         const created = await categoriasRepo.create({
           sucursal_id: sucursalId,
@@ -84,7 +90,7 @@ export const PanelCategorias = ({
           descripcion: form.descripcion,
           estado: form.estado,
         });
-        toast.success(`Categoría “${created?.nombre ?? nombre}” creada`);
+        toast.success(`CategorÃ­a â€œ${created?.nombre ?? nombre}â€ creada`);
       }
       resetForm();
       await cargarCategorias();
@@ -112,7 +118,7 @@ export const PanelCategorias = ({
     try {
       await categoriasRepo.enable(id);
       await cargarCategorias();
-      toast.success('Categoría habilitada');
+      toast.success('CategorÃ­a habilitada');
     } catch (err) {
       toast.error('No se pudo habilitar');
     } finally {
@@ -121,12 +127,12 @@ export const PanelCategorias = ({
   };
 
   const deshabilitar = async (id) => {
-    if (!confirm('Esto deshabilitará la categoría. ¿Continuar?')) return;
+    if (!confirm('Esto deshabilitarÃ¡ la categorÃ­a. Â¿Continuar?')) return;
     setBusyId(id);
     try {
       await categoriasRepo.disable(id);
       await cargarCategorias();
-      toast.success('Categoría deshabilitada');
+      toast.success('CategorÃ­a deshabilitada');
     } catch (err) {
       toast.error('No se pudo deshabilitar');
     } finally {
@@ -135,12 +141,12 @@ export const PanelCategorias = ({
   };
 
   const eliminar = async (id) => {
-    if (!confirm('⛔ Esto eliminará la categoría definitivamente. ¿Continuar?')) return;
+    if (!confirm('â›” Esto eliminarÃ¡ la categorÃ­a definitivamente. Â¿Continuar?')) return;
     setBusyId(id);
     try {
       await categoriasRepo.destroy(id);
       await cargarCategorias();
-      toast.success('Categoría eliminada definitivamente');
+      toast.success('CategorÃ­a eliminada definitivamente');
     } catch (err) {
       toast.error('No se pudo eliminar');
     } finally {
@@ -148,17 +154,25 @@ export const PanelCategorias = ({
     }
   };
 
+  if (!sucursalId)
+    return (
+      <section className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center text-gray-600'>
+        <p className='text-lg font-semibold text-texto'>Selecciona un foodtruck</p>
+        <p className='text-sm'>Escoge una sucursal para gestionar sus categorías.</p>
+      </section>
+    );
+
   if (loading)
     return (
       <section className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
-        <p>Cargando categorías…</p>
+        <p>Cargando categorÃ­asâ€¦</p>
       </section>
     );
 
   return (
     <section className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6'>
       <div className='flex items-center justify-between gap-4'>
-        <h2 className='text-xl font-semibold text-gray-900'>Categorías</h2>
+        <h2 className='text-xl font-semibold text-gray-900'>CategorÃ­as</h2>
 
         <Button
           onClick={() => setShowDisabled((v) => !v)}
@@ -183,7 +197,7 @@ export const PanelCategorias = ({
             type='text'
             value={form.nombre}
             onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-            placeholder='Nombre categoría'
+            placeholder='Nombre categorÃ­a'
             className='border border-gray-300 rounded-lg px-3 py-2 w-full'
           />
         </div>
@@ -200,11 +214,11 @@ export const PanelCategorias = ({
         </div>
 
         <div className='md:col-span-6'>
-          <label className='block text-xs text-gray-600 mb-1'>Descripción</label>
+          <label className='block text-xs text-gray-600 mb-1'>DescripciÃ³n</label>
           <textarea
             value={form.descripcion}
             onChange={(e) => setForm((f) => ({ ...f, descripcion: e.target.value }))}
-            placeholder='Descripción (opcional)'
+            placeholder='DescripciÃ³n (opcional)'
             rows={3}
             className='border border-gray-300 rounded-lg px-3 py-2 w-full'
           />
@@ -236,7 +250,7 @@ export const PanelCategorias = ({
         <thead>
           <tr className='bg-gray-50'>
             <th className='px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase'>Nombre</th>
-            <th className='px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase'>Descripción</th>
+            <th className='px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase'>DescripciÃ³n</th>
             <th className='px-4 py-2 text-xs font-semibold text-gray-500 uppercase'>Acciones</th>
           </tr>
         </thead>
@@ -246,16 +260,16 @@ export const PanelCategorias = ({
               <td
                 colSpan='3'
                 className='text-center py-4 text-sm text-gray-500'>
-                {showDisabled ? 'No hay categorías registradas.' : 'No hay categorías activas.'}
+                {showDisabled ? 'No hay categorÃ­as registradas.' : 'No hay categorÃ­as activas.'}
               </td>
             </tr>
           ) : (
             categorias.map((c) => (
               <tr
-                key={c.categoria_id ?? c.id ?? `${c.nombre}-${c.descripcion ?? ''}`} // 👈 agrega esta línea
+                key={c.categoria_id ?? c.id ?? `${c.nombre}-${c.descripcion ?? ''}`} // ðŸ‘ˆ agrega esta lÃ­nea
                 className={`hover:bg-gray-50 ${c.estado === false ? 'opacity-70' : ''}`}>
                 <td className='px-4 py-2 text-sm text-gray-900'>{c.nombre}</td>
-                <td className='px-4 py-2 text-sm text-gray-700'>{c.descripcion || '—'}</td>
+                <td className='px-4 py-2 text-sm text-gray-700'>{c.descripcion || 'â€”'}</td>
                 <td className='px-4 py-2 text-right space-x-2'>
                   <Button
                     onClick={() => startEdit(c)}
@@ -286,3 +300,6 @@ export const PanelCategorias = ({
     </section>
   );
 };
+
+
+

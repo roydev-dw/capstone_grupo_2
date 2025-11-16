@@ -51,7 +51,7 @@ function throwHttpError(res, data) {
 }
 
 /**
- * Hace una request “cruda” (sin refresh). Agrega el Bearer si corresponde.
+ * Hace una request "cruda" (sin refresh). Agrega el Bearer si corresponde.
  */
 async function rawRequest(endpoint, { method = 'GET', body, headers } = {}) {
   const url = joinUrl(BASE, endpoint);
@@ -86,7 +86,7 @@ async function rawRequest(endpoint, { method = 'GET', body, headers } = {}) {
 }
 
 /**
- * Request con manejo de refresh automático.
+ * Request con manejo de refresh automatico.
  */
 async function request(endpoint, opts = {}) {
   try {
@@ -110,24 +110,93 @@ async function request(endpoint, opts = {}) {
 
       const newAccess = r?.access || r?.access_token;
       const newRefresh = r?.refresh || r?.refresh_token || refresh;
-      if (!newAccess) throw new Error('No se recibió nuevo access token.');
+      if (!newAccess) throw new Error('No se recibio nuevo access token.');
 
       setTokens({ access: newAccess, refresh: newRefresh });
 
       // Reintentamos la original
       return await rawRequest(endpoint, opts);
     } catch (e) {
-      // Refresh falló → limpiar y notificar
+      // Refresh fallo -> limpiar y notificar
       clearSession();
       throw e;
     }
   }
 }
 
+/**
+ * Cliente HTTP centralizado para la API de Punto Sabor.
+ *
+ * @remarks Adjunta automaticamente el token Bearer y reintenta peticiones 401
+ * mediante refresh token para mantener la sesion consistente.
+ */
 export const apiFoodTrucks = {
+  /**
+   * Ejecuta un `GET` autenticado contra la API.
+   *
+   * @param {string} endpoint Ruta relativa como `v1/categorias/`.
+   * @returns {Promise<any>} Respuesta ya parseada del backend.
+   * @throws {Error} Si la API responde con un estado HTTP distinto de 2xx.
+   * @example
+   * ```js
+   * const categorias = await apiFoodTrucks.get('v1/categorias/');
+   * ```
+   * @remarks Devuelve directamente el payload tras manejar tokens y refresh.
+   */
   get: (endpoint) => request(endpoint, { method: 'GET' }),
+  /**
+   * Ejecuta un `POST` autenticado.
+   *
+   * @param {string} endpoint Ruta relativa destino.
+   * @param {unknown} body Payload serializable o `FormData`.
+   * @returns {Promise<any>} JSON o texto segun `Content-Type`.
+   * @throws {Error} Si el backend rechaza la operacion o caduca la sesion.
+   * @example
+   * ```js
+   * await apiFoodTrucks.post('v1/categorias/', { nombre: 'Bebestibles' });
+   * ```
+   * @remarks Serializa objetos como JSON salvo que se entregue `FormData`.
+   */
   post: (endpoint, body) => request(endpoint, { method: 'POST', body }),
+  /**
+   * Ejecuta un `PUT` autenticado.
+   *
+   * @param {string} endpoint Ruta relativa destino.
+   * @param {unknown} body Payload con los campos a reemplazar.
+   * @returns {Promise<any>} Respuesta parseada del backend.
+   * @throws {Error} Si el backend responde con error HTTP.
+   * @example
+   * ```js
+   * await apiFoodTrucks.put('v1/empresas/12/', { estado: true });
+   * ```
+   * @remarks Usa `JSON.stringify` antes de enviar si el cuerpo no es `FormData`.
+   */
   put: (endpoint, body) => request(endpoint, { method: 'PUT', body }),
+  /**
+   * Ejecuta un `PATCH` autenticado.
+   *
+   * @param {string} endpoint Ruta relativa destino.
+   * @param {unknown} body Subconjunto de campos a actualizar.
+   * @returns {Promise<any>} Respuesta parseada del backend.
+   * @throws {Error} Si la operacion parcial falla en el backend.
+   * @example
+   * ```js
+   * await apiFoodTrucks.patch('v1/usuarios/3/', { estado: false });
+   * ```
+   * @remarks Mantiene la semantica parcial esperada por la API de Punto Sabor.
+   */
   patch: (endpoint, body) => request(endpoint, { method: 'PATCH', body }),
+  /**
+   * Ejecuta un `DELETE` autenticado.
+   *
+   * @param {string} endpoint Ruta relativa destino.
+   * @returns {Promise<any>} `null` en respuestas 204 o el cuerpo parseado.
+   * @throws {Error} Si el backend rechaza la eliminacion.
+   * @example
+   * ```js
+   * await apiFoodTrucks.delete('v1/productos/99/');
+   * ```
+   * @remarks Garantiza el manejo de tokens incluso para eliminaciones idempotentes.
+   */
   delete: (endpoint) => request(endpoint, { method: 'DELETE' }),
 };

@@ -15,9 +15,6 @@ const ADJACENCY_BY_ROLE = {
   },
   administrador: {
     '/admin': { prev: '/panel' },
-    '/supervisor': { prev: '/panel' },
-    '/vendedor': { prev: '/panel' },
-    '/panel': {},
   },
 };
 

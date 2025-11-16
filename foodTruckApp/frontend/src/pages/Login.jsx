@@ -4,9 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/logo/Logo';
 import { apiFoodTrucks } from '../utils/api';
 import { toast } from 'react-hot-toast'; // opcional si quieres mostrar mensajes
+import { normalizeEmpresaId } from '../utils/empresas';
 
 const normalizeUser = (rawUser) => {
   if (!rawUser) return null;
+
+  const empresaObj =
+    rawUser.empresa && typeof rawUser.empresa === 'object' ? rawUser.empresa : rawUser.company;
 
   const role =
     rawUser.rol || rawUser.role || rawUser.user_role || rawUser.userRol || null;
@@ -63,6 +67,43 @@ const normalizeUser = (rawUser) => {
     .toString()
     .trim();
 
+  const empresaId = normalizeEmpresaId(
+    rawUser.empresa_id ?? rawUser.company_id ?? empresaObj?.id ?? null
+  );
+  const empresaNombre =
+    rawUser.empresa_nombre ??
+    rawUser.company_name ??
+    empresaObj?.nombre ??
+    empresaObj?.name ??
+    '';
+  const sucursalesRaw =
+    Array.isArray(rawUser.sucursales)
+      ? rawUser.sucursales
+      : Array.isArray(rawUser.sucursales_ids)
+      ? rawUser.sucursales_ids
+      : Array.isArray(rawUser.sucursalesId)
+      ? rawUser.sucursalesId
+      : null;
+  const sucursales_ids = sucursalesRaw
+    ? sucursalesRaw
+        .map((value) => {
+          if (typeof value === 'number') return value;
+          if (typeof value === 'string') {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+          }
+          if (typeof value === 'object') {
+            const candidate = value?.id ?? value?.sucursal_id ?? value?.sucursalId ?? null;
+            const parsed = Number(candidate);
+            return Number.isFinite(parsed) ? parsed : null;
+          }
+          return null;
+        })
+        .filter((value) => value != null)
+    : rawUser.sucursal_id != null
+    ? [Number(rawUser.sucursal_id)]
+    : [];
+
   return {
     id:
       rawUser.id ??
@@ -97,6 +138,9 @@ const normalizeUser = (rawUser) => {
       rawUser.sucursal ??
       rawUser.branch ??
       '',
+    empresa_id: empresaId,
+    empresa_nombre: empresaNombre,
+    sucursales_ids,
     rol_id: Number.isNaN(roleId) ? null : roleId,
     rol_nombre: roleName,
     avatar: rawUser.avatar ?? rawUser.profile_image ?? rawUser.image ?? '',
@@ -231,6 +275,26 @@ export const Login = () => {
               refreshedUser.sucursal_id ?? baseUser.sucursal_id ?? null,
             sucursal_nombre:
               refreshedUser.sucursal_nombre ?? baseUser.sucursal_nombre ?? '',
+            empresa_id:
+              refreshedUser.empresa_id ?? baseUser.empresa_id ?? normalizeEmpresaId(
+                rawUser?.empresa_id ?? rawUser?.company_id ?? rawUser?.empresa?.id ?? rawUser?.company?.id ?? null
+              ),
+            empresa_nombre:
+              refreshedUser.empresa_nombre ??
+              baseUser.empresa_nombre ??
+              rawUser?.empresa_nombre ??
+              rawUser?.company_name ??
+              rawUser?.empresa?.nombre ??
+              rawUser?.company?.nombre ??
+              '',
+            sucursales_ids:
+              refreshedUser.sucursales_ids ??
+              baseUser.sucursales_ids ??
+              (Array.isArray(rawUser?.sucursales)
+                ? rawUser.sucursales
+                : rawUser?.sucursal_id != null
+                ? [Number(rawUser.sucursal_id)]
+                : []),
             avatar: refreshedUser.avatar ?? baseUser.avatar ?? '',
           };
         }
@@ -261,12 +325,9 @@ export const Login = () => {
       const roleId = Number(user?.rol_id);
       let target = '/vendedor'; // default
 
-      if (
-        roleName === 'administrador' ||
-        roleId === 1 ||
-        roleName === 'supervisor' ||
-        roleId === 3
-      ) {
+      if (roleName === 'administrador' || roleId === 1) {
+        target = '/admin';
+      } else if (roleName === 'supervisor' || roleId === 3) {
         target = '/panel';
       }
 

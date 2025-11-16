@@ -16,7 +16,9 @@ export default function PublicRoute({ children }) {
     const role = normalizeRoleName(user.rol_nombre);
     let target = '/vendedor';
 
-    if (role === 'administrador' || role === 'supervisor') {
+    if (role === 'administrador') {
+      target = '/admin';
+    } else if (role === 'supervisor') {
       target = '/panel';
     } else if (role === 'vendedor') {
       target = '/vendedor';
