@@ -1,4 +1,4 @@
-﻿import { useMemo, useRef, useState, useEffect } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/logo/Logo';
 import { UserMenu } from '../components/sesion_usuario/UserMenu';
@@ -12,12 +12,14 @@ import { Button } from '../components/ui/Button';
 import { PanelUsuarios } from '../components/paneles/PanelUsuarios';
 import { PanelSucursales } from '../components/paneles/PanelSucursales';
 import { PiUserCirclePlusFill } from 'react-icons/pi';
-import { TbCategoryPlus } from 'react-icons/tb';
+import { TbCategoryPlus, TbAdjustments } from 'react-icons/tb';
 import { AiOutlineProduct } from 'react-icons/ai';
 import { sucursalesRepo } from '../utils/repoSucursales';
 import { FaCheckCircle } from 'react-icons/fa';
 import { EMPRESA_PUNTO_SABOR_ID, perteneceAEmpresa, getEmpresaIdFromUser } from '../utils/empresas';
 import { FoodtruckIcon } from '../components/ui/Iconos';
+import { categoriasRepo } from '../utils/repoCategorias';
+import { PanelModificadores } from '../components/paneles/PanelModificadores';
 
 const quickActions = [
   {
@@ -36,6 +38,15 @@ const quickActions = [
     cta: 'Gestionar categorías',
     icon: TbCategoryPlus,
     className: 'text-info',
+    btnColor: 'info',
+  },
+  {
+    id: 'modificadores',
+    title: 'Administrar modificadores',
+    description: 'Define y controla los agregados disponibles para los productos.',
+    cta: 'Gestionar modificadores',
+    icon: TbAdjustments,
+    className: 'text-amber-500',
     btnColor: 'info',
   },
   {
@@ -110,6 +121,7 @@ export const Administrador = () => {
 
   const usuariosRef = useRef(null);
   const categoriasRef = useRef(null);
+  const modificadoresRef = useRef(null);
   const productosRef = useRef(null);
 
   const sessionUser = useMemo(() => {
@@ -212,6 +224,7 @@ export const Administrador = () => {
     const map = {
       usuarios: usuariosRef,
       categorias: categoriasRef,
+      modificadores: modificadoresRef,
       productos: productosRef,
     };
     const r = openPanel ? map[openPanel]?.current : null;
@@ -219,10 +232,32 @@ export const Administrador = () => {
   }, [openPanel]);
 
   useEffect(() => {
+    let cancelled = false;
     setCategoriasActivas([]);
     if (!sucursalId) {
       setOpenPanel(null);
+      return () => {
+        cancelled = true;
+      };
     }
+
+    (async () => {
+      try {
+        const { items } = await categoriasRepo.list({ sucursalId });
+        if (!cancelled) {
+          setCategoriasActivas(items);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('No se pudieron cargar las categor?as para la sucursal seleccionada.', err);
+          setCategoriasActivas([]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [sucursalId]);
 
   const handleQuickAction = (id) => {
@@ -280,13 +315,13 @@ export const Administrador = () => {
             </div>
 
             <div className='grid gap-4 md:grid-cols-[2fr,1fr] '>
-              <div>
+              <div className='mt-10 mb-10'>
                 {loadingSucursales ? (
                   <p className='text-sm text-texto-suave'>Cargando foodtrucks disponibles...</p>
                 ) : sucursalesDisponibles.length === 0 ? (
-                  <p className='text-sm text-texto-suave'>Todavía no registras foodtrucks para esta empresa.</p>
+                  <p className='text-sm text-texto-suave'>Todav?a no registras foodtrucks para esta empresa.</p>
                 ) : (
-                  <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
+                  <div className='grid gap-8 sm:grid-cols-2 lg:grid-cols-3'>
                     {[...sucursalesDisponibles]
                       .filter((s) => s.id != null)
                       .sort((a, b) => Number(a.id) - Number(b.id))
@@ -367,7 +402,7 @@ export const Administrador = () => {
           <section className='space-y-12'>
             <div>
               <h2 className='text-xl font-semibold mb-4'>Acciones rápidas</h2>
-              <div className='grid gap-6 md:grid-cols-3'>
+              <div className='grid gap-6 md:grid-cols-3 text-center'>
                 {quickActions.map((action) => (
                   <QuickActionCard key={action.id} action={action} onClick={handleQuickAction} />
                 ))}
@@ -394,6 +429,19 @@ export const Administrador = () => {
                     sucursalId={sucursalId}
                     sucursalNombre={sucursalNombre}
                     onAvailableChange={(activas) => setCategoriasActivas(activas)}
+                    onClose={() => setOpenPanel(null)}
+                  />
+                </div>
+              )}
+            </section>
+
+            <section ref={modificadoresRef}>
+              {openPanel === 'modificadores' && (
+                <div className='mt-2'>
+                  <PanelModificadores
+                    empresaId={empresaId}
+                    sucursalId={sucursalId}
+                    onClose={() => setOpenPanel(null)}
                   />
                 </div>
               )}
@@ -402,7 +450,12 @@ export const Administrador = () => {
             <section ref={productosRef}>
               {openPanel === 'productos' && (
                 <div className='mt-2'>
-                  <PanelProductos categoriasActivas={categoriasActivas} sucursalId={sucursalId} />
+                  <PanelProductos
+                    categoriasActivas={categoriasActivas}
+                    sucursalId={sucursalId}
+                    empresaId={empresaId}
+                    onClose={() => setOpenPanel(null)}
+                  />
                 </div>
               )}
             </section>

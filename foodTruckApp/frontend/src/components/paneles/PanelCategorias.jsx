@@ -3,12 +3,9 @@ import { useEffect, useState } from 'react';
 import { categoriasRepo } from '../../utils/repoCategorias';
 import { toast } from 'react-hot-toast';
 import { Button } from '../ui/Button';
+import { IoClose } from 'react-icons/io5';
 
-export const PanelCategorias = ({
-  sucursalId,
-  sucursalNombre,
-  onAvailableChange, // (itemsActivos) => void
-}) => {
+export const PanelCategorias = ({ sucursalId, sucursalNombre, onAvailableChange, onClose }) => {
   const [categorias, setCategorias] = useState([]);
   const [catSource, setCatSource] = useState('cache');
   const [loading, setLoading] = useState(true);
@@ -50,7 +47,7 @@ export const PanelCategorias = ({
       try {
         await cargarCategorias();
       } catch (err) {
-        setErrorMsg(err?.message ?? 'Error cargando categorÃ­as');
+        setErrorMsg(err?.message ?? 'Error cargando categorías');
       } finally {
         setLoading(false);
       }
@@ -165,21 +162,24 @@ export const PanelCategorias = ({
   if (loading)
     return (
       <section className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6'>
-        <p>Cargando categorÃ­asâ€¦</p>
+        <p>Cargando categorías…</p>
       </section>
     );
 
   return (
     <section className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6'>
       <div className='flex items-center justify-between gap-4'>
-        <h2 className='text-xl font-semibold text-gray-900'>CategorÃ­as</h2>
-
-        <Button
-          onClick={() => setShowDisabled((v) => !v)}
-          size='md'
-          color='secundario'>
-          {showDisabled ? 'Ocultar deshabilitadas' : 'Mostrar deshabilitadas'}
-        </Button>
+        <h2 className='text-xl font-semibold text-gray-900'>Categorías</h2>
+        {/* Botón para cerrar el componente completo */}
+        {onClose && (
+          <button
+            type='button'
+            onClick={onClose}
+            className='text-info hover:text-peligro text-lg leading-none hover:scale-140 transition-transform duration-300'
+            aria-label='Cerrar panel de usuarios'>
+            <IoClose className='w-10 h-10' />
+          </button>
+        )}
       </div>
 
       <div className='rounded-xl border border-gray-200 bg-gray-50 px-4 py-3'>
@@ -188,16 +188,14 @@ export const PanelCategorias = ({
       </div>
 
       {/* Formulario */}
-      <form
-        onSubmit={submitCategoria}
-        className='grid grid-cols-1 md:grid-cols-6 gap-4'>
+      <form onSubmit={submitCategoria} className='grid grid-cols-1 md:grid-cols-6 gap-4'>
         <div className='md:col-span-3'>
           <label className='block text-xs text-gray-600 mb-1'>Nombre</label>
           <input
             type='text'
             value={form.nombre}
             onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-            placeholder='Nombre categorÃ­a'
+            placeholder='Nombre categoría'
             className='border border-gray-300 rounded-lg px-3 py-2 w-full'
           />
         </div>
@@ -214,32 +212,30 @@ export const PanelCategorias = ({
         </div>
 
         <div className='md:col-span-6'>
-          <label className='block text-xs text-gray-600 mb-1'>DescripciÃ³n</label>
+          <label className='block text-xs text-gray-600 mb-1'>Descripción</label>
           <textarea
             value={form.descripcion}
             onChange={(e) => setForm((f) => ({ ...f, descripcion: e.target.value }))}
-            placeholder='DescripciÃ³n (opcional)'
+            placeholder='Descripción (opcional)'
             rows={3}
             className='border border-gray-300 rounded-lg px-3 py-2 w-full'
           />
         </div>
 
-        <div className='md:col-span-6 flex items-end gap-2'>
-          <Button
-            type='submit'
-            disabled={saving || !form.nombre.trim()}
-            color='primario'>
-            {editId ? 'Guardar cambios' : 'Crear'}
-          </Button>
-
-          {editId && (
-            <Button
-              type='button'
-              onClick={resetForm}
-              color='peligro'>
-              Cancelar
+        <div className='md:col-span-6 flex justify-between gap-2 mt-10'>
+          <div className='flex gap-2'>
+            <Button type='submit' disabled={saving || !form.nombre.trim()} color='primario'>
+              {editId ? 'Guardar cambios' : 'Crear'}
             </Button>
-          )}
+            {editId && (
+              <Button type='button' onClick={resetForm} color='peligro'>
+                Cancelar
+              </Button>
+            )}
+          </div>
+          <Button onClick={() => setShowDisabled((v) => !v)} size='md' color='secundario'>
+            {showDisabled ? 'Ocultar deshabilitadas' : 'Mostrar deshabilitadas'}
+          </Button>
         </div>
       </form>
 
@@ -250,31 +246,26 @@ export const PanelCategorias = ({
         <thead>
           <tr className='bg-gray-50'>
             <th className='px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase'>Nombre</th>
-            <th className='px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase'>DescripciÃ³n</th>
+            <th className='px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase'>Descripción</th>
             <th className='px-4 py-2 text-xs font-semibold text-gray-500 uppercase'>Acciones</th>
           </tr>
         </thead>
         <tbody className='bg-white divide-y divide-gray-200'>
           {categorias.length === 0 ? (
             <tr>
-              <td
-                colSpan='3'
-                className='text-center py-4 text-sm text-gray-500'>
-                {showDisabled ? 'No hay categorÃ­as registradas.' : 'No hay categorÃ­as activas.'}
+              <td colSpan='3' className='text-center py-4 text-sm text-gray-500'>
+                {showDisabled ? 'No hay categorías registradas.' : 'No hay categorías activas.'}
               </td>
             </tr>
           ) : (
             categorias.map((c) => (
               <tr
-                key={c.categoria_id ?? c.id ?? `${c.nombre}-${c.descripcion ?? ''}`} // ðŸ‘ˆ agrega esta lÃ­nea
+                key={c.categoria_id ?? c.id ?? `${c.nombre}-${c.descripcion ?? ''}`}
                 className={`hover:bg-gray-50 ${c.estado === false ? 'opacity-70' : ''}`}>
                 <td className='px-4 py-2 text-sm text-gray-900'>{c.nombre}</td>
                 <td className='px-4 py-2 text-sm text-gray-700'>{c.descripcion || 'â€”'}</td>
                 <td className='px-4 py-2 text-right space-x-2'>
-                  <Button
-                    onClick={() => startEdit(c)}
-                    disabled={!!busyId}
-                    color='info'>
+                  <Button onClick={() => startEdit(c)} disabled={!!busyId} color='info'>
                     Editar
                   </Button>
 
@@ -285,10 +276,7 @@ export const PanelCategorias = ({
                     {c.estado !== false ? 'Ocultar' : 'Mostrar'}
                   </Button>
 
-                  <Button
-                    onClick={() => eliminar(c.categoria_id)}
-                    disabled={busyId === c.categoria_id}
-                    color='peligro'>
+                  <Button onClick={() => eliminar(c.categoria_id)} disabled={busyId === c.categoria_id} color='peligro'>
                     Eliminar
                   </Button>
                 </td>
@@ -300,6 +288,3 @@ export const PanelCategorias = ({
     </section>
   );
 };
-
-
-

@@ -22,9 +22,7 @@ const normalizeSucursalId = (value) => {
 };
 const filterBySucursal = (items, sucursalId) => {
   if (sucursalId == null) return items;
-  return items.filter(
-    (item) => Number(item.sucursal_id ?? item.sucursalId) === sucursalId
-  );
+  return items.filter((item) => Number(item.sucursal_id ?? item.sucursalId) === sucursalId);
 };
 
 const byIdAsc = (a, b) => {
@@ -42,16 +40,10 @@ function mapCategoriaFromApi(c, extra = {}) {
   return {
     id,
     categoria_id: id,
-    sucursal_id:
-      c?.sucursal_id != null ? Number(c.sucursal_id) : extra.sucursal_id,
+    sucursal_id: c?.sucursal_id != null ? Number(c.sucursal_id) : extra.sucursal_id,
     nombre: c?.nombre ?? c?.name ?? extra.nombre ?? '',
     descripcion: c?.descripcion ?? c?.description ?? extra.descripcion ?? '',
-    estado:
-      c?.estado != null
-        ? !!c.estado
-        : extra.estado != null
-        ? !!extra.estado
-        : true,
+    estado: c?.estado != null ? !!c.estado : extra.estado != null ? !!extra.estado : true,
     updatedAt: extra.updatedAt ?? nowIso(),
     pending,
     pendingFlag: pending ? 1 : 0,
@@ -65,12 +57,10 @@ function mapCategoriaFromApi(c, extra = {}) {
 function mapCategoriaToApi(form) {
   const nombre = String(form?.nombre ?? '').trim();
   const descripcion = String(form?.descripcion ?? '').trim();
-  const sucursal_id =
-    form?.sucursal_id != null ? Number(form.sucursal_id) : undefined;
+  const sucursal_id = form?.sucursal_id != null ? Number(form.sucursal_id) : undefined;
 
   const body = {};
-  if (!Number.isNaN(sucursal_id) && sucursal_id != null)
-    body.sucursal_id = sucursal_id;
+  if (!Number.isNaN(sucursal_id) && sucursal_id != null) body.sucursal_id = sucursal_id;
   if (nombre) body.nombre = nombre;
   if (descripcion) body.descripcion = descripcion;
   if ('estado' in (form || {})) body.estado = !!form.estado;
@@ -169,9 +159,7 @@ async function processCategoryDelete(entry) {
   const id = targetId != null ? String(targetId) : '';
   if (!id) return;
   const hard = !!payload.hard;
-  const url = hard
-    ? `${ENDPOINT_BASE}${id}/?hard=1`
-    : `${ENDPOINT_BASE}${id}/`;
+  const url = hard ? `${ENDPOINT_BASE}${id}/?hard=1` : `${ENDPOINT_BASE}${id}/`;
   await apiFoodTrucks.delete(url);
   await db.categories.delete(id);
 }
@@ -246,23 +234,14 @@ export const categoriasRepo = {
     const query = sucursalNumber != null ? `?sucursal_id=${sucursalNumber}` : '';
     try {
       const res = await apiFoodTrucks.get(`${ENDPOINT_BASE}${query}`);
-      const items = pickList(res).map((c) =>
-        mapCategoriaFromApi(c, { pending: false, pendingOp: null })
-      );
+      const items = pickList(res).map((c) => mapCategoriaFromApi(c, { pending: false, pendingOp: null }));
       const filteredItems = filterBySucursal(items, sucursalNumber);
 
       await db.transaction('rw', db.categories, async () => {
-        const pendingLocals = await db.categories
-          .where('pendingFlag')
-          .equals(1)
-          .toArray();
+        const pendingLocals = await db.categories.where('pendingFlag').equals(1).toArray();
         const pendingMap = new Map(
           pendingLocals
-            .filter((item) =>
-              sucursalNumber == null
-                ? true
-                : Number(item.sucursal_id) === sucursalNumber
-            )
+            .filter((item) => (sucursalNumber == null ? true : Number(item.sucursal_id) === sucursalNumber))
             .map((item) => [item.id, item])
         );
         const serverIds = new Set(filteredItems.map((item) => item.id));
@@ -281,24 +260,16 @@ export const categoriasRepo = {
         if (toPersist.length) await db.categories.bulkPut(toPersist);
 
         const scopedCollection =
-          sucursalNumber != null
-            ? db.categories.where('sucursal_id').equals(sucursalNumber)
-            : db.categories;
+          sucursalNumber != null ? db.categories.where('sucursal_id').equals(sucursalNumber) : db.categories;
         const staleKeys = await scopedCollection
-          .filter(
-            (c) =>
-              !c.pending && !c.tempId && !!c.id && !serverIds.has(c.id)
-          )
+          .filter((c) => !c.pending && !c.tempId && !!c.id && !serverIds.has(c.id))
           .primaryKeys();
         if (staleKeys.length) await db.categories.bulkDelete(staleKeys);
       });
 
       let ordered;
       if (sucursalNumber != null) {
-        ordered = await db.categories
-          .where('sucursal_id')
-          .equals(sucursalNumber)
-          .toArray();
+        ordered = await db.categories.where('sucursal_id').equals(sucursalNumber).toArray();
       } else {
         ordered = await db.categories.orderBy('updatedAt').toArray();
       }
@@ -307,10 +278,7 @@ export const categoriasRepo = {
     } catch (err) {
       let cached;
       if (sucursalNumber != null) {
-        cached = await db.categories
-          .where('sucursal_id')
-          .equals(sucursalNumber)
-          .toArray();
+        cached = await db.categories.where('sucursal_id').equals(sucursalNumber).toArray();
       } else {
         cached = await db.categories.toArray();
       }
@@ -327,6 +295,7 @@ export const categoriasRepo = {
   async create(form) {
     const body = mapCategoriaToApi({ ...form });
     if (!('estado' in body)) body.estado = true;
+    console.log('[categoriasRepo.create] body a enviar:', body);
 
     const tempId = generateTempId('category');
     const provisional = mapCategoriaFromApi(
@@ -389,14 +358,12 @@ export const categoriasRepo = {
     }
 
     try {
-      const updatedRes = await apiFoodTrucks.put(
-        `${ENDPOINT_BASE}${id}/`,
-        body
-      );
-      const updated = mapCategoriaFromApi(
-        pickObject(updatedRes) || { id, ...body },
-        { pending: false, tempId: null, pendingOp: null }
-      );
+      const updatedRes = await apiFoodTrucks.put(`${ENDPOINT_BASE}${id}/`, body);
+      const updated = mapCategoriaFromApi(pickObject(updatedRes) || { id, ...body }, {
+        pending: false,
+        tempId: null,
+        pendingOp: null,
+      });
       await db.categories.put(updated);
       return updated;
     } catch (err) {
@@ -479,14 +446,12 @@ export const categoriasRepo = {
     }
 
     try {
-      const updatedRes = await apiFoodTrucks.put(
-        `${ENDPOINT_BASE}${id}/`,
-        body
-      );
-      const updated = mapCategoriaFromApi(
-        pickObject(updatedRes) || { id, ...body },
-        { pending: false, pendingOp: null, tempId: null }
-      );
+      const updatedRes = await apiFoodTrucks.put(`${ENDPOINT_BASE}${id}/`, body);
+      const updated = mapCategoriaFromApi(pickObject(updatedRes) || { id, ...body }, {
+        pending: false,
+        pendingOp: null,
+        tempId: null,
+      });
       await db.categories.put(updated);
       return updated;
     } catch (err) {

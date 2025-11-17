@@ -9,7 +9,11 @@ import { PanelProductos } from '../components/paneles/PanelProductos';
 import { EstadoEnLinea } from '../components/ui/EstadoEnLinea';
 import { PanelCategorias } from '../components/paneles/PanelCategorias';
 import { PendingSyncTable } from '../components/sync/PendingSyncTable';
-import { EMPRESA_PUNTO_SABOR_ID, perteneceAEmpresa } from '../utils/empresas';
+import {
+  EMPRESA_PUNTO_SABOR_ID,
+  perteneceAEmpresa,
+  getEmpresaIdFromUser,
+} from '../utils/empresas';
 
 export const Supervisor = () => {
   const navigate = useNavigate();
@@ -30,8 +34,13 @@ export const Supervisor = () => {
     }
   }, [user]);
 
-  const sucursalId = sessionUser?.sucursal_id ?? sessionUser?.sucursalId ?? undefined;
-  const sucursalNombre = sessionUser?.sucursal_nombre ?? sessionUser?.sucursalNombre ?? 'Sucursal sin asignar';
+  const sucursalId =
+    sessionUser?.sucursal_id ?? sessionUser?.sucursalId ?? undefined;
+  const sucursalNombre =
+    sessionUser?.sucursal_nombre ??
+    sessionUser?.sucursalNombre ??
+    'Sucursal sin asignar';
+  const empresaId = getEmpresaIdFromUser(sessionUser) ?? undefined;
 
   useEffect(() => {
     if (!sessionUser) return;
@@ -68,6 +77,7 @@ export const Supervisor = () => {
           ref={panelProdRef}
           categoriasActivas={categoriasActivas}
           sucursalId={sucursalId}
+          empresaId={empresaId}
         />
 
         <PendingSyncTable />
@@ -75,3 +85,4 @@ export const Supervisor = () => {
     </div>
   );
 };
+

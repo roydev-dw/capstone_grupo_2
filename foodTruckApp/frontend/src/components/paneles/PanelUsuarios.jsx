@@ -380,7 +380,7 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
           <button
             type='button'
             onClick={onClose}
-            className='text-info hover:text-peligro text-lg leading-none hover:scale-110 transition-transform duration-300'
+            className='text-info hover:text-peligro text-lg leading-none hover:scale-140 transition-transform duration-300'
             aria-label='Cerrar panel de usuarios'>
             <IoClose className='w-10 h-10' />
           </button>

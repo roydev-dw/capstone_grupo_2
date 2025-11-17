@@ -528,27 +528,59 @@ export async function processProductQueue() {
 export const productosRepo = {
   async list(options = {}) {
     const sucursalNumber = normalizeSucursalId(options.sucursalId);
-    const { items: categoriasPermitidas = [] } = sucursalNumber != null
-      ? await categoriasRepo.listAll({ sucursalId: sucursalNumber })
-      : { items: [] };
-    const allowedCategoryIds = new Set(
-      categoriasPermitidas.map((cat) =>
-        String(cat.categoria_id ?? cat.id ?? '')
-      )
-    );
+
+    let allowedCategoryIds = null;
+    if (
+      Array.isArray(options.allowedCategoryIds) &&
+      options.allowedCategoryIds.length
+    ) {
+      allowedCategoryIds = new Set(
+        options.allowedCategoryIds
+          .map((value) => {
+            if (
+              value &&
+              typeof value === 'object' &&
+              (value.categoria_id != null || value.id != null)
+            ) {
+              return String(value.categoria_id ?? value.id ?? '');
+            }
+            return String(value ?? '');
+          })
+          .map((value) => value.trim())
+          .filter((value) => value !== '')
+      );
+    } else if (sucursalNumber != null) {
+      const { items: categoriasPermitidas = [] } = await categoriasRepo.listAll(
+        { sucursalId: sucursalNumber }
+      );
+      allowedCategoryIds = new Set(
+        categoriasPermitidas
+          .map((cat) => String(cat.categoria_id ?? cat.id ?? '').trim())
+          .filter((value) => value !== '')
+      );
+    }
     const query = sucursalNumber != null ? `?sucursal_id=${sucursalNumber}` : '';
     try {
       const res = await apiFoodTrucks.get(`${ENDPOINT_BASE}${query}`);
       const data = await unwrapResponse(res);
       const fetchedItems = pickList(data).map((x) =>
-        mapProductFromApi(x.producto ?? x, { pending: false, pendingOp: null })
+        mapProductFromApi(x.producto ?? x, {
+          pending: false,
+          pendingOp: null,
+          sucursal_id:
+            sucursalNumber != null
+              ? sucursalNumber
+              : x?.sucursal_id ?? x?.producto?.sucursal_id,
+        })
       );
       const filteredFromBackend = filterBySucursal(
         fetchedItems,
         sucursalNumber
       ).filter((item) => {
-        if (!allowedCategoryIds.size) return true;
-        return allowedCategoryIds.has(String(item.categoria_id ?? ''));
+        if (!allowedCategoryIds) return true;
+        const catId = String(item.categoria_id ?? '').trim();
+        if (!catId) return false;
+        return allowedCategoryIds.has(catId);
       });
 
       await db.transaction('rw', db.products, async () => {
@@ -599,10 +631,12 @@ export const productosRepo = {
           .where('sucursal_id')
           .equals(sucursalNumber)
           .toArray();
-        if (allowedCategoryIds.size) {
-          scoped = scoped.filter((item) =>
-            allowedCategoryIds.has(String(item.categoria_id ?? ''))
-          );
+        if (allowedCategoryIds) {
+          scoped = scoped.filter((item) => {
+            const catId = String(item.categoria_id ?? '').trim();
+            if (!catId) return false;
+            return allowedCategoryIds.has(catId);
+          });
         }
         ordered = sortByUpdatedDesc(scoped);
       } else {
@@ -616,10 +650,12 @@ export const productosRepo = {
           .where('sucursal_id')
           .equals(sucursalNumber)
           .toArray();
-        if (allowedCategoryIds.size) {
-          scoped = scoped.filter((item) =>
-            allowedCategoryIds.has(String(item.categoria_id ?? ''))
-          );
+        if (allowedCategoryIds) {
+          scoped = scoped.filter((item) => {
+            const catId = String(item.categoria_id ?? '').trim();
+            if (!catId) return false;
+            return allowedCategoryIds.has(catId);
+          });
         }
         cached = sortByUpdatedDesc(scoped);
       } else {

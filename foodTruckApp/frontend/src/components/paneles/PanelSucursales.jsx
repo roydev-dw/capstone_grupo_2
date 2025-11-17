@@ -249,9 +249,6 @@ export const PanelSucursales = ({
             Cada sucursal puede tener su propio catálogo, equipos y listas de productos.
           </p>
         </div>
-        <Button type='button' onClick={() => setShowDisabled((v) => !v)} color='secundario'>
-          {showDisabled ? 'Ocultar deshabilitadas' : 'Mostrar deshabilitadas'}
-        </Button>
       </div>
 
       <div className='grid gap-4 md:grid-cols-3'>
@@ -307,7 +304,7 @@ export const PanelSucursales = ({
             <option value='0'>Inactiva</option>
           </select>
         </div>
-        <div className='md:col-span-4 flex justify-end gap-2'>
+        <div className='md:col-span-4 flex justify-between gap-2 mt-10'>
           <Button type='submit' disabled={!isAdmin || saving || updatingAdmin} color='primario'>
             {updatingAdmin ? 'Actualizando permisos...' : editId ? 'Guardar cambios' : 'Crear sucursal'}
           </Button>
@@ -316,6 +313,9 @@ export const PanelSucursales = ({
               Cancelar
             </Button>
           )}
+          <Button type='button' onClick={() => setShowDisabled((v) => !v)} color='secundario'>
+            {showDisabled ? 'Ocultar deshabilitadas' : 'Mostrar deshabilitadas'}
+          </Button>
         </div>
       </form>
 
@@ -325,11 +325,9 @@ export const PanelSucursales = ({
         <table className='min-w-full divide-y divide-gray-200 text-sm'>
           <thead className='bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500'>
             <tr>
-              <th className='px-4 py-2'>Nombre</th>
-              <th className='px-4 py-2'>Empresa</th>
+              <th className='px-4 py-2'>Sucursal</th>
               <th className='px-4 py-2'>Dirección</th>
               <th className='px-4 py-2'>Teléfono</th>
-              <th className='px-4 py-2 text-center'>Estado</th>
               <th className='px-4 py-2 text-xs text-right'>Acciones</th>
             </tr>
           </thead>
@@ -355,17 +353,8 @@ export const PanelSucursales = ({
                     key={sucursal.id}
                     className={sucursal.estado === false ? 'opacity-70 hover:bg-gray-50' : 'hover:bg-gray-50'}>
                     <td className='px-4 py-2 text-texto font-medium'>{sucursal.nombre}</td>
-                    <td className='px-4 py-2 text-gray-600'>{empresaNombre}</td>
                     <td className='px-4 py-2 text-gray-600'>{sucursal.direccion || 'Sin dirección'}</td>
                     <td className='px-4 py-2 text-gray-600'>{sucursal.telefono || 'Sin teléfono'}</td>
-                    <td className='px-4 py-2 text-center'>
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                          sucursal.estado ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'
-                        }`}>
-                        {sucursal.estado ? 'Activa' : 'Inactiva'}
-                      </span>
-                    </td>
                     <td className='px-4 py-2 text-right space-x-2'>
                       <Button
                         onClick={() => startEdit(sucursal)}

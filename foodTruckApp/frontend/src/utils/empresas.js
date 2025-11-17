@@ -27,9 +27,16 @@ export function getEmpresaIdFromUser(user) {
     user.empresa_id,
     user.empresaId,
     user.empresa?.id,
+    user.empresa?.empresa_id,
+    user.empresa?.empresaId,
     user._raw?.empresa_id,
     user._raw?.empresaId,
     user._raw?.empresa?.id,
+    user._raw?.empresa?.empresa_id,
+    user._raw?.empresa?.empresaId,
+    user?.empresa?.empresa?.id,
+    user?.empresa?.empresa?.empresa_id,
+    user?.empresa?.empresa?.empresaId,
   ];
   for (const candidato of candidatos) {
     const normalizado = normalizeEmpresaId(candidato);
