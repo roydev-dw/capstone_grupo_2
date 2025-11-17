@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../utils/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { OpcionesModal } from '../components/vendedor/ModalOpciones';
@@ -8,6 +9,9 @@ import { FiltroCategoria } from '../components/vendedor/FiltroCategoria';
 import { TarjetaProducto } from '../components/vendedor/TarjetaProducto';
 import { PedidoActual } from '../components/vendedor/PedidoActual';
 import { BotonTarjeta } from '../components/vendedor/BotonTarjeta';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { categoriasRepo } from '../utils/repoCategorias';
+import { EMPRESA_PUNTO_SABOR_ID, perteneceAEmpresa } from '../utils/empresas';
 
 // --- helper para normalizar respuestas {results:[]}, {data:{results:[]}}, [] ---
 const pickList = (res) =>
@@ -29,14 +33,38 @@ const resolveImg = (u) => {
 };
 
 export const Vendedor = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [isMobileAbrirCarrito, setIsMobileAbrirCarrito] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
   const [fetchError, setFetchError] = useState('');
 
+  const { user } = useCurrentUser();
+  const sessionUser = useMemo(() => {
+    if (user) return user;
+    try {
+      const raw = localStorage.getItem('currentUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, [user]);
+  const sucursalId = sessionUser?.sucursal_id ?? sessionUser?.sucursalId ?? null;
+
+  useEffect(() => {
+    if (!sessionUser) return;
+    if (!perteneceAEmpresa(sessionUser, [EMPRESA_PUNTO_SABOR_ID])) {
+      navigate('/403', { replace: true });
+    }
+  }, [sessionUser, navigate]);
+
   const carrito = useLiveQuery(() => db.carrito.toArray(), []) || [];
-  const productosDB = useLiveQuery(() => db.products.toArray(), []) || [];
+  const productosDB =
+    useLiveQuery(() => {
+      if (sucursalId == null) return [];
+      return db.products.where('sucursal_id').equals(Number(sucursalId)).toArray();
+    }, [sucursalId]) || [];
 
   const productosUI = useMemo(() => {
     return (productosDB || [])
@@ -46,9 +74,34 @@ export const Vendedor = () => {
         name: p.nombre,
         price: Number(p.precio_base || 0),
         image: resolveImg(p.imagen_url || ''),
-        category: p.categoria_nombre || '',
+        category: p.categoria_nombre?.trim() || 'Sin categoria',
       }));
   }, [productosDB]);
+
+  const categoriasDisponibles = useMemo(() => {
+    const unique = new Set();
+    productosUI.forEach((p) => {
+      if (p.category) unique.add(p.category);
+    });
+    return ['Todos', ...Array.from(unique)];
+  }, [productosUI]);
+
+  const [categoriaActiva, setCategoriaActiva] = useState('Todos');
+
+  useEffect(() => {
+    setCategoriaActiva('Todos');
+  }, [sucursalId]);
+
+  useEffect(() => {
+    if (!categoriasDisponibles.includes(categoriaActiva)) {
+      setCategoriaActiva('Todos');
+    }
+  }, [categoriasDisponibles, categoriaActiva]);
+
+  const productosFiltrados = useMemo(() => {
+    if (categoriaActiva === 'Todos') return productosUI;
+    return productosUI.filter((p) => p.category === categoriaActiva);
+  }, [categoriaActiva, productosUI]);
 
   const generarIdItemCarrito = useCallback((producto) => {
     const base = String(producto.id);
@@ -75,24 +128,47 @@ export const Vendedor = () => {
 
         const accessToken = localStorage.getItem('accessToken');
         if (!accessToken) {
-          console.warn('[Vendedor] No se encontró accessToken. No se sincronizarán productos.');
           setLoading(false);
-          setFetchError('No se encontró una sesión activa. Inicia sesión nuevamente.');
+          setFetchError('No se encontro una sesion activa. Inicia sesion nuevamente.');
           return;
         }
 
-        const countPrev = await db.products.count();
+        if (sucursalId == null) {
+          setLoading(false);
+          setFetchError('Tu usuario no tiene una sucursal asignada.');
+          return;
+        }
+
+        const { items: categoriasPermitidas } = await categoriasRepo.listAll({
+          sucursalId,
+        });
+        const allowedCategoryIds = new Set(
+          (categoriasPermitidas || []).map((cat) => String(cat.categoria_id ?? cat.id ?? ''))
+        );
+
+        const countPrev = await db.products.where('sucursal_id').equals(Number(sucursalId)).count();
         setLoading(countPrev === 0);
 
-        const res = await apiFoodTrucks.get('v1/productos/');
+        const endpoint = `v1/productos/?sucursal_id=${sucursalId}`;
+        const res = await apiFoodTrucks.get(endpoint);
         const list = pickList(res);
+        const filtradosPorCategoria =
+          allowedCategoryIds.size === 0
+            ? list
+            : list.filter((item) => allowedCategoryIds.has(String(item?.categoria_id ?? item?.categoriaId ?? '')));
+        console.log('[Vendedor] Productos recibidos', {
+          sucursalId,
+          total: filtradosPorCategoria.length,
+          ids: filtradosPorCategoria.map((item) => item.producto_id ?? item.id),
+        });
 
-        const normalizados = list.map((r) => {
+        const normalizados = filtradosPorCategoria.map((r) => {
           const productoId = String(r.producto_id ?? r.id ?? '');
           const categoriaId = String(r.categoria_id ?? 'sin-categoria');
           const updatedAt =
             r.updated_at ?? r.updatedAt ?? r.fecha_actualizacion ?? r.fecha_creacion ?? new Date().toISOString();
           const syncedAt = new Date().toISOString();
+          const sucursalAsignada = r.sucursal_id != null ? Number(r.sucursal_id) : Number(sucursalId);
           return {
             id: productoId,
             producto_id: productoId,
@@ -111,35 +187,13 @@ export const Vendedor = () => {
             syncedAt,
             lastError: null,
             pendingOp: null,
+            sucursal_id: sucursalAsignada,
           };
         });
 
-        await db.transaction('rw', db.products, db.categories, async () => {
+        await db.transaction('rw', db.products, async () => {
+          await db.products.filter((item) => Number(item.sucursal_id ?? -1) === Number(sucursalId)).delete();
           await db.products.bulkPut(normalizados);
-
-          const categoriasDerivadas = [
-            ...new Map(
-              normalizados.map((p) => [
-                p.categoria_id,
-                {
-                  id: p.categoria_id,
-                  categoria_id: p.categoria_id,
-                  nombre: p.categoria_nombre,
-                  descripcion: '',
-                  estado: true,
-                  updatedAt: new Date().toISOString(),
-                  pending: false,
-                  tempId: null,
-                  syncedAt: new Date().toISOString(),
-                  lastError: null,
-                  pendingOp: null,
-                },
-              ])
-            ).values(),
-          ];
-          if (categoriasDerivadas.length) {
-            await db.categories.bulkPut(categoriasDerivadas);
-          }
         });
       } catch (error) {
         console.error('[Vendedor] Error al sincronizar:', error);
@@ -150,7 +204,7 @@ export const Vendedor = () => {
     };
 
     syncProductos();
-  }, []);
+  }, [sucursalId]);
 
   const handleProductClick = useCallback((producto) => {
     if (producto.options && producto.options.length > 0) {
@@ -293,9 +347,9 @@ export const Vendedor = () => {
           )}
 
           <main className='flex-1 px-6 pb-6 pt-40 lg:p-12'>
-            <FiltroCategoria />
+            <FiltroCategoria categories={categoriasDisponibles} value={categoriaActiva} onChange={setCategoriaActiva} />
 
-            {productosUI.length === 0 ? (
+            {productosFiltrados.length === 0 ? (
               <div className='mt-8 p-6 bg-white rounded-xl border text-gray-600'>
                 <p className='font-semibold'>No hay productos para mostrar.</p>
                 <p className='text-sm mt-1'>
@@ -305,11 +359,8 @@ export const Vendedor = () => {
               </div>
             ) : (
               <div className='grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 grid-cols-extra gap-8 mt-8'>
-                {productosUI.map((p) => (
-                  <div
-                    key={p.id}
-                    className='cursor-pointer'
-                    onClick={() => handleProductClick(p)}>
+                {productosFiltrados.map((p) => (
+                  <div key={p.id} className='cursor-pointer' onClick={() => handleProductClick(p)}>
                     <TarjetaProducto product={p} />
                   </div>
                 ))}
@@ -327,10 +378,7 @@ export const Vendedor = () => {
           </main>
 
           <div className='lg:hidden'>
-            <BotonTarjeta
-              cartCount={cartCount}
-              onClick={() => setIsMobileAbrirCarrito(true)}
-            />
+            <BotonTarjeta cartCount={cartCount} onClick={() => setIsMobileAbrirCarrito(true)} />
           </div>
         </div>
 
@@ -370,3 +418,7 @@ export const Vendedor = () => {
     </div>
   );
 };
+
+
+
+

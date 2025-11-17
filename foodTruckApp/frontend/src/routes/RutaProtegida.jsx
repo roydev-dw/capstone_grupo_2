@@ -1,7 +1,8 @@
-import { Navigate, useLocation } from 'react-router-dom';
+﻿import { Navigate, useLocation } from 'react-router-dom';
 import { getAccessToken } from '../utils/session';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { normalizeRoleName } from '../utils/roles';
+import { getEmpresaIdFromUser } from '../utils/empresas';
 
 const redirectToLogin = '/login';
 
@@ -19,7 +20,26 @@ function hasRequiredRole(user, allow) {
   return matchByName || matchById;
 }
 
-export default function ProtectedRoute({ children, allow, forbiddenTo = '/403' }) {
+function hasRequiredCompany(user, allowCompanies) {
+  if (!allowCompanies) return true;
+  const required = Array.isArray(allowCompanies) ? allowCompanies : [allowCompanies];
+  const normalized = required
+    .map((value) => {
+      if (value == null || value === '') return null;
+      const num = Number(value);
+      return Number.isFinite(num) ? num : null;
+    })
+    .filter((value) => value != null);
+
+  if (normalized.length === 0) return true;
+
+  const userCompanyId = getEmpresaIdFromUser(user);
+
+  if (userCompanyId == null) return false;
+  return normalized.includes(Number(userCompanyId));
+}
+
+export default function ProtectedRoute({ children, allow, allowCompanies, forbiddenTo = '/403' }) {
   const location = useLocation();
   const token = getAccessToken();
   const { user, loadingUser, errorUser } = useCurrentUser({
@@ -50,17 +70,16 @@ export default function ProtectedRoute({ children, allow, forbiddenTo = '/403' }
     );
   }
 
-  if (errorUser) {
+  if (!hasRequiredRole(user, allow)) {
     return (
       <Navigate
         to={forbiddenTo}
         replace
-        state={{ from: location }}
       />
     );
   }
 
-  if (!hasRequiredRole(user, allow)) {
+  if (!hasRequiredCompany(user, allowCompanies)) {
     return (
       <Navigate
         to={forbiddenTo}

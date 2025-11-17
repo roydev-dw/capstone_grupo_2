@@ -15,6 +15,15 @@ const pickList = (res) =>
     : [];
 
 const pickObject = (res) => res?.data ?? res?.result ?? res ?? null;
+const normalizeSucursalId = (value) => {
+  if (value == null || value === '') return null;
+  const num = Number(value);
+  return Number.isNaN(num) ? null : num;
+};
+const filterBySucursal = (items, sucursalId) => {
+  if (sucursalId == null) return items;
+  return items.filter((item) => Number(item.sucursal_id ?? item.sucursalId) === sucursalId);
+};
 
 const byIdAsc = (a, b) => {
   const ai = Number(a.categoria_id);
@@ -31,16 +40,10 @@ function mapCategoriaFromApi(c, extra = {}) {
   return {
     id,
     categoria_id: id,
-    sucursal_id:
-      c?.sucursal_id != null ? Number(c.sucursal_id) : extra.sucursal_id,
+    sucursal_id: c?.sucursal_id != null ? Number(c.sucursal_id) : extra.sucursal_id,
     nombre: c?.nombre ?? c?.name ?? extra.nombre ?? '',
     descripcion: c?.descripcion ?? c?.description ?? extra.descripcion ?? '',
-    estado:
-      c?.estado != null
-        ? !!c.estado
-        : extra.estado != null
-        ? !!extra.estado
-        : true,
+    estado: c?.estado != null ? !!c.estado : extra.estado != null ? !!extra.estado : true,
     updatedAt: extra.updatedAt ?? nowIso(),
     pending,
     pendingFlag: pending ? 1 : 0,
@@ -54,12 +57,10 @@ function mapCategoriaFromApi(c, extra = {}) {
 function mapCategoriaToApi(form) {
   const nombre = String(form?.nombre ?? '').trim();
   const descripcion = String(form?.descripcion ?? '').trim();
-  const sucursal_id =
-    form?.sucursal_id != null ? Number(form.sucursal_id) : undefined;
+  const sucursal_id = form?.sucursal_id != null ? Number(form.sucursal_id) : undefined;
 
   const body = {};
-  if (!Number.isNaN(sucursal_id) && sucursal_id != null)
-    body.sucursal_id = sucursal_id;
+  if (!Number.isNaN(sucursal_id) && sucursal_id != null) body.sucursal_id = sucursal_id;
   if (nombre) body.nombre = nombre;
   if (descripcion) body.descripcion = descripcion;
   if ('estado' in (form || {})) body.estado = !!form.estado;
@@ -158,13 +159,23 @@ async function processCategoryDelete(entry) {
   const id = targetId != null ? String(targetId) : '';
   if (!id) return;
   const hard = !!payload.hard;
-  const url = hard
-    ? `${ENDPOINT_BASE}${id}/?hard=1`
-    : `${ENDPOINT_BASE}${id}/`;
+  const url = hard ? `${ENDPOINT_BASE}${id}/?hard=1` : `${ENDPOINT_BASE}${id}/`;
   await apiFoodTrucks.delete(url);
   await db.categories.delete(id);
 }
 
+/**
+ * Procesa una entrada de outbox relacionada a categorias (create/update/delete).
+ *
+ * @param {{op: string, payload?: Record<string, any>, tempId?: string, targetId?: string}} entry Operacion pendiente.
+ * @returns {Promise<any>} Resultado normalizado o `undefined` segun el tipo de operacion.
+ * @throws {Error} Si la API de Punto Sabor rechaza la operacion.
+ * @example
+ * ```js
+ * await processCategoryOutboxEntry({ op: 'create', payload: { body } });
+ * ```
+ * @remarks Se invoca desde el `syncManager` para reintentar acciones offline.
+ */
 export async function processCategoryOutboxEntry(entry) {
   if (!entry) return;
   if (entry.op === 'create') return processCategoryCreate(entry);
@@ -173,6 +184,17 @@ export async function processCategoryOutboxEntry(entry) {
   throw new Error(`Operacion de outbox categorias desconocida: ${entry.op}`);
 }
 
+/**
+ * Recorre la cola de outbox de categorias y ejecuta las operaciones pendientes.
+ *
+ * @returns {Promise<void>} Resuelve al sincronizar o propaga el primer error encontrado.
+ * @throws {Error} Si alguna de las entradas falla al reenviarse.
+ * @example
+ * ```js
+ * await processCategoryQueue();
+ * ```
+ * @remarks Cambia el estado de cada entrada a `sending`, `synced` o `error` segun resultado.
+ */
 export async function processCategoryQueue() {
   const entries = await db.outbox
     .where('type')
@@ -201,25 +223,30 @@ export async function processCategoryQueue() {
   }
 }
 
+/**
+ * Repositorio de categorias con soporte offline y sincronizacion diferida.
+ *
+ * @remarks Combina llamadas HTTP con Dexie para mantener la UI del PDP de Punto Sabor reactiva sin conexion.
+ */
 export const categoriasRepo = {
-  async listAll() {
+  async listAll({ sucursalId } = {}) {
+    const sucursalNumber = normalizeSucursalId(sucursalId);
+    const query = sucursalNumber != null ? `?sucursal_id=${sucursalNumber}` : '';
     try {
-      const res = await apiFoodTrucks.get(ENDPOINT_BASE);
-      const items = pickList(res).map((c) =>
-        mapCategoriaFromApi(c, { pending: false, pendingOp: null })
-      );
+      const res = await apiFoodTrucks.get(`${ENDPOINT_BASE}${query}`);
+      const items = pickList(res).map((c) => mapCategoriaFromApi(c, { pending: false, pendingOp: null }));
+      const filteredItems = filterBySucursal(items, sucursalNumber);
 
       await db.transaction('rw', db.categories, async () => {
-        const pendingLocals = await db.categories
-          .where('pendingFlag')
-          .equals(1)
-          .toArray();
+        const pendingLocals = await db.categories.where('pendingFlag').equals(1).toArray();
         const pendingMap = new Map(
-          pendingLocals.map((item) => [item.id, item])
+          pendingLocals
+            .filter((item) => (sucursalNumber == null ? true : Number(item.sucursal_id) === sucursalNumber))
+            .map((item) => [item.id, item])
         );
-        const serverIds = new Set(items.map((item) => item.id));
+        const serverIds = new Set(filteredItems.map((item) => item.id));
 
-        const toPersist = items.map((item) => {
+        const toPersist = filteredItems.map((item) => {
           if (!item.id) return item;
           if (!pendingMap.has(item.id)) return item;
           const local = pendingMap.get(item.id);
@@ -232,38 +259,43 @@ export const categoriasRepo = {
 
         if (toPersist.length) await db.categories.bulkPut(toPersist);
 
-        const staleKeys = await db.categories
-          .filter(
-            (c) =>
-              !c.pending &&
-              !c.tempId &&
-              !!c.id &&
-              !serverIds.has(c.id)
-          )
+        const scopedCollection =
+          sucursalNumber != null ? db.categories.where('sucursal_id').equals(sucursalNumber) : db.categories;
+        const staleKeys = await scopedCollection
+          .filter((c) => !c.pending && !c.tempId && !!c.id && !serverIds.has(c.id))
           .primaryKeys();
         if (staleKeys.length) await db.categories.bulkDelete(staleKeys);
       });
 
-      const ordered = await db.categories
-        .orderBy('updatedAt')
-        .toArray();
+      let ordered;
+      if (sucursalNumber != null) {
+        ordered = await db.categories.where('sucursal_id').equals(sucursalNumber).toArray();
+      } else {
+        ordered = await db.categories.orderBy('updatedAt').toArray();
+      }
       ordered.sort(byIdAsc);
       return { items: ordered, source: 'network' };
     } catch (err) {
-      const cached = await db.categories.toArray();
+      let cached;
+      if (sucursalNumber != null) {
+        cached = await db.categories.where('sucursal_id').equals(sucursalNumber).toArray();
+      } else {
+        cached = await db.categories.toArray();
+      }
       cached.sort(byIdAsc);
       return { items: cached, source: 'cache' };
     }
   },
 
-  async list() {
-    const { items, source } = await this.listAll();
+  async list(options) {
+    const { items, source } = await this.listAll(options);
     return { items: items.filter((c) => c.estado !== false), source };
   },
 
   async create(form) {
     const body = mapCategoriaToApi({ ...form });
     if (!('estado' in body)) body.estado = true;
+    console.log('[categoriasRepo.create] body a enviar:', body);
 
     const tempId = generateTempId('category');
     const provisional = mapCategoriaFromApi(
@@ -326,14 +358,12 @@ export const categoriasRepo = {
     }
 
     try {
-      const updatedRes = await apiFoodTrucks.put(
-        `${ENDPOINT_BASE}${id}/`,
-        body
-      );
-      const updated = mapCategoriaFromApi(
-        pickObject(updatedRes) || { id, ...body },
-        { pending: false, tempId: null, pendingOp: null }
-      );
+      const updatedRes = await apiFoodTrucks.put(`${ENDPOINT_BASE}${id}/`, body);
+      const updated = mapCategoriaFromApi(pickObject(updatedRes) || { id, ...body }, {
+        pending: false,
+        tempId: null,
+        pendingOp: null,
+      });
       await db.categories.put(updated);
       return updated;
     } catch (err) {
@@ -416,14 +446,12 @@ export const categoriasRepo = {
     }
 
     try {
-      const updatedRes = await apiFoodTrucks.put(
-        `${ENDPOINT_BASE}${id}/`,
-        body
-      );
-      const updated = mapCategoriaFromApi(
-        pickObject(updatedRes) || { id, ...body },
-        { pending: false, pendingOp: null, tempId: null }
-      );
+      const updatedRes = await apiFoodTrucks.put(`${ENDPOINT_BASE}${id}/`, body);
+      const updated = mapCategoriaFromApi(pickObject(updatedRes) || { id, ...body }, {
+        pending: false,
+        pendingOp: null,
+        tempId: null,
+      });
       await db.categories.put(updated);
       return updated;
     } catch (err) {

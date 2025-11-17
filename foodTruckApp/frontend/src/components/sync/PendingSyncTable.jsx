@@ -38,7 +38,7 @@ function formatTs(ts) {
   }
 }
 
-export const PendingSyncTable = () => {
+export const PendingSyncTable = ({ className = '' }) => {
   const entries = useLiveQuery(() => db.outbox.orderBy('ts').reverse().toArray(), []) || [];
 
   const hasEntries = entries.length > 0;
@@ -69,11 +69,7 @@ export const PendingSyncTable = () => {
   const header = (
     <div className='flex flex-wrap items-center justify-between gap-3 mb-3'>
       <h2 className='text-xl font-semibold text-gray-700'>Cola de sincronizacion</h2>
-      <Button
-        type='button'
-        disabled={!hasWork}
-        color='secundario'
-        onClick={handleSyncNow}>
+      <Button type='button' disabled={!hasWork} color='secundario' onClick={handleSyncNow}>
         Sincronizar
       </Button>
     </div>
@@ -89,7 +85,7 @@ export const PendingSyncTable = () => {
   }
 
   return (
-    <section className='bg-white border border-gray-200 rounded-lg p-4 shadow-sm'>
+    <section className={`bg-white border border-gray-200 rounded-lg p-4 shadow-sm ${className}`}>
       {header}
 
       <div className='overflow-x-auto'>
@@ -116,9 +112,7 @@ export const PendingSyncTable = () => {
                 <tr key={`${entry.type}-${entry.op}-${key}`}>
                   <td className='px-3 py-2 text-slate-700'>{typeLabel}</td>
                   <td className='px-3 py-2 text-slate-600'>{opLabel}</td>
-                  <td
-                    className={`px-3 py-2 font-medium ${statusColor}`}
-                    title={statusTooltip}>
+                  <td className={`px-3 py-2 font-medium ${statusColor}`} title={statusTooltip}>
                     {statusLabel}
                     {entry.status === 'error' && statusTooltip ? (
                       <span className='ml-2 text-xs text-slate-400'>(detalle)</span>

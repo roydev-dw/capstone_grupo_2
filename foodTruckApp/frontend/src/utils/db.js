@@ -4,6 +4,15 @@ const DB_NAME = 'puntoSaborDB';
 const LEGACY_DB_NAMES = ['appDB', 'foodTruckDB'];
 const MIGRATION_FLAG = 'puntoSaborDB:migrated:v1';
 
+/**
+ * Instancia principal de Dexie que define el esquema offline de Punto Sabor.
+ *
+ * @example
+ * ```js
+ * await db.products.toArray();
+ * ```
+ * @remarks Expone stores para productos, categorias, carrito y outbox.
+ */
 export const db = new Dexie(DB_NAME);
 
 db.version(1).stores({
@@ -39,9 +48,61 @@ db.version(2)
       });
   });
 
+db.version(3)
+  .stores({
+    products:
+      '&id, producto_id, categoria_id, sucursal_id, updatedAt, pendingFlag, [sucursal_id+updatedAt], [categoria_id+updatedAt]',
+    categories: '&id, categoria_id, sucursal_id, updatedAt, pendingFlag',
+    carrito: '&idItemCarrito',
+    outbox: '++key, type, op, status, ts, tempId, targetId',
+  })
+  .upgrade(async (tx) => {
+    await tx
+      .table('products')
+      .toCollection()
+      .modify((item) => {
+        if (item.sucursal_id != null) {
+          item.sucursal_id = Number(item.sucursal_id);
+        } else if (item.sucursalId != null) {
+          item.sucursal_id = Number(item.sucursalId);
+        }
+      });
+    await tx
+      .table('categories')
+      .toCollection()
+      .modify((item) => {
+        if (item.sucursal_id != null) {
+          item.sucursal_id = Number(item.sucursal_id);
+        } else if (item.sucursalId != null) {
+          item.sucursal_id = Number(item.sucursalId);
+        }
+      });
+  });
+
+/**
+ * Indica si el navegador reporta conectividad disponible.
+ *
+ * @returns {boolean} `true` cuando `navigator.onLine` esta disponible o el entorno es SSR.
+ * @example
+ * ```js
+ * if (isOnline()) await syncNow();
+ * ```
+ * @remarks En servidores o tests (sin `navigator`) asume `true` para evitar bloquear flujos.
+ */
 export const isOnline = () =>
   typeof navigator === 'undefined' ? true : navigator.onLine;
 
+/**
+ * Genera un identificador temporal legible para outbox/local-store.
+ *
+ * @param {string} [prefix='tmp'] Prefijo que identifica el tipo de entidad.
+ * @returns {string} Cadena unica basada en random y timestamp.
+ * @example
+ * ```js
+ * const tempId = generateTempId('product');
+ * ```
+ * @remarks Garantiza colisiones bajas sin depender de librerias externas.
+ */
 export const generateTempId = (prefix = 'tmp') =>
   `${prefix}-${Math.random().toString(36).slice(2)}-${Date.now()}`;
 
@@ -68,14 +129,14 @@ async function migrateLegacyData() {
     try {
       await legacy.open();
     } catch (err) {
-      console.warn(`[db] No se pudo abrir la BD legacy "${legacyName}":`, err);
+      console.error(`[db] No se pudo abrir la BD legacy "${legacyName}":`, err);
       continue;
     }
 
     try {
       migrated = await migrateFromLegacyInstance(legacy, legacyName);
     } catch (err) {
-      console.warn(
+      console.error(
         `[db] Error migrando datos desde "${legacyName}":`,
         err
       );
@@ -182,6 +243,8 @@ async function migrateFromLegacyInstance(legacy, name) {
               syncedAt: nowIso(),
               lastError: null,
               pendingOp: null,
+              sucursal_id:
+                item.sucursal_id != null ? Number(item.sucursal_id) : undefined,
             };
           });
           await db.products.bulkPut(migratedProducts);
@@ -311,6 +374,12 @@ function normalizeProductRecord(raw) {
     syncedAt: raw.syncedAt ?? nowIso(),
     lastError: raw.lastError ?? null,
     pendingOp: raw.pendingOp ?? null,
+    sucursal_id:
+      raw.sucursal_id != null
+        ? Number(raw.sucursal_id)
+        : raw.sucursalId != null
+        ? Number(raw.sucursalId)
+        : undefined,
   };
 }
 
@@ -345,13 +414,24 @@ function normalizeCategoryRecord(raw) {
 
 db.on('ready', () => {
   migrateLegacyData().catch((err) =>
-    console.warn('[db] Error en migracion legacy:', err)
+    console.error('[db] Error en migracion legacy:', err)
   );
   normalizePendingFlags().catch((err) =>
-    console.warn('[db] Error normalizando flags pending:', err)
+    console.error('[db] Error normalizando flags pending:', err)
   );
 });
 
+/**
+ * Promesa que se resuelve cuando Dexie abre la base o rechaza con el error encontrado.
+ *
+ * @returns {Promise<boolean>} `true` al completar la apertura.
+ * @throws {Error} Si IndexedDB no esta disponible o Dexie no logra abrir.
+ * @example
+ * ```js
+ * await dbReady;
+ * ```
+ * @remarks Permite gatear pantallas que dependen del cache offline antes de operar.
+ */
 export const dbReady = db
   .open()
   .catch((err) => {
@@ -395,4 +475,5 @@ async function normalizePendingFlags() {
     }
   });
 }
+
 

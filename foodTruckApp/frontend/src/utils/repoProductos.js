@@ -2,6 +2,7 @@ import { db, generateTempId, isOnline } from './db';
 import { apiFoodTrucks } from './api';
 import Resizer from 'react-image-file-resizer';
 import { enqueueOutbox } from './offlineQueue';
+import { categoriasRepo } from './repoCategorias';
 
 const ENDPOINT_BASE = 'v1/productos/';
 const productoImagenEndpoint = (id) => `v1/productos/${id}/imagen/`;
@@ -68,6 +69,17 @@ function pickList(res) {
 function pickObject(res) {
   return res?.data ?? res?.result ?? res ?? null;
 }
+const normalizeSucursalId = (value) => {
+  if (value == null || value === '') return null;
+  const num = Number(value);
+  return Number.isNaN(num) ? null : num;
+};
+const filterBySucursal = (items, sucursalId) => {
+  if (sucursalId == null) return items;
+  return items.filter(
+    (item) => Number(item.sucursal_id ?? item.sucursalId) === sucursalId
+  );
+};
 
 function resolveUpdatedAt(p, fallback) {
   return (
@@ -108,6 +120,12 @@ function mapProductFromApi(p, extra = {}) {
     syncedAt: extra.syncedAt ?? nowIso(),
     lastError: extra.lastError ?? null,
     pendingOp: extra.pendingOp ?? null,
+    sucursal_id:
+      p?.sucursal_id != null
+        ? Number(p.sucursal_id)
+        : extra.sucursal_id != null
+        ? Number(extra.sucursal_id)
+        : undefined,
   };
 }
 
@@ -120,6 +138,8 @@ function mapProductToApi(form) {
     tiempo_preparacion: Number(form?.tiempo_preparacion || 0),
     estado: normalizeEstado(form?.estado),
   };
+  const sucursal = normalizeSucursalId(form?.sucursal_id);
+  if (sucursal != null) obj.sucursal_id = sucursal;
   const img = (form?.imagen_url ?? '').trim();
   if (img) obj.imagen_url = img;
   return obj;
@@ -143,8 +163,15 @@ function buildUpdateJson(form) {
   if ('estado' in (form || {})) body.estado = normalizeEstado(form?.estado);
   const img = (form?.imagen_url ?? '').trim();
   if (img) body.imagen_url = img;
+  const sucursal = normalizeSucursalId(form?.sucursal_id);
+  if (sucursal != null) body.sucursal_id = sucursal;
   return body;
 }
+
+const sortByUpdatedDesc = (arr) =>
+  arr.sort((a, b) =>
+    String(b?.updatedAt ?? '').localeCompare(String(a?.updatedAt ?? ''))
+  );
 
 function readFileAsDataUrl(file) {
   if (!file) return Promise.resolve(null);
@@ -336,7 +363,12 @@ async function processProductCreate(entry) {
 
   let product = mapProductFromApi(
     { ...obj, producto_id: newId },
-    { pending: false, tempId: null, pendingOp: null }
+    {
+      pending: false,
+      tempId: null,
+      pendingOp: null,
+      sucursal_id: body?.sucursal_id,
+    }
   );
 
   if (payload.image) {
@@ -429,6 +461,18 @@ async function processProductDelete(entry) {
   await db.products.delete(id);
 }
 
+/**
+ * Ejecuta la operacion asociada a una entrada de outbox de productos.
+ *
+ * @param {{op: string, payload?: Record<string, any>, tempId?: string, targetId?: string}} entry Entrada pendiente.
+ * @returns {Promise<void>} Resuelve al completar la operacion o propaga el error HTTP.
+ * @throws {Error} Si la API de Punto Sabor rechaza la operacion.
+ * @example
+ * ```js
+ * await processProductOutboxEntry({ op: 'delete', targetId: productoId });
+ * ```
+ * @remarks Se usa desde `syncManager` para reintentar creaciones, actualizaciones o eliminaciones offline.
+ */
 export async function processProductOutboxEntry(entry) {
   if (!entry) return;
   if (entry.op === 'create') return processProductCreate(entry);
@@ -437,6 +481,17 @@ export async function processProductOutboxEntry(entry) {
   throw new Error(`Operacion de outbox productos desconocida: ${entry.op}`);
 }
 
+/**
+ * Recorre la outbox de productos y procesa cada entrada pendiente.
+ *
+ * @returns {Promise<void>} Resuelve cuando todas las entradas se sincronizan.
+ * @throws {Error} Si alguna entrada falla y se debe avisar a la UI.
+ * @example
+ * ```js
+ * await processProductQueue();
+ * ```
+ * @remarks Marca cada registro con `status` correspondiente (`sending`, `synced`, `error`).
+ */
 export async function processProductQueue() {
   const entries = await db.outbox
     .where('type')
@@ -465,14 +520,68 @@ export async function processProductQueue() {
   }
 }
 
+/**
+ * Repositorio de productos que combina cache Dexie y API Punto Sabor.
+ *
+ * @remarks Centraliza las operaciones `list`, `create`, `update`, `delete` con soporte offline-first.
+ */
 export const productosRepo = {
-  async list() {
-    try {
-      const res = await apiFoodTrucks.get(ENDPOINT_BASE);
-      const data = await unwrapResponse(res);
-      const serverItems = pickList(data).map((x) =>
-        mapProductFromApi(x.producto ?? x, { pending: false, pendingOp: null })
+  async list(options = {}) {
+    const sucursalNumber = normalizeSucursalId(options.sucursalId);
+
+    let allowedCategoryIds = null;
+    if (
+      Array.isArray(options.allowedCategoryIds) &&
+      options.allowedCategoryIds.length
+    ) {
+      allowedCategoryIds = new Set(
+        options.allowedCategoryIds
+          .map((value) => {
+            if (
+              value &&
+              typeof value === 'object' &&
+              (value.categoria_id != null || value.id != null)
+            ) {
+              return String(value.categoria_id ?? value.id ?? '');
+            }
+            return String(value ?? '');
+          })
+          .map((value) => value.trim())
+          .filter((value) => value !== '')
       );
+    } else if (sucursalNumber != null) {
+      const { items: categoriasPermitidas = [] } = await categoriasRepo.listAll(
+        { sucursalId: sucursalNumber }
+      );
+      allowedCategoryIds = new Set(
+        categoriasPermitidas
+          .map((cat) => String(cat.categoria_id ?? cat.id ?? '').trim())
+          .filter((value) => value !== '')
+      );
+    }
+    const query = sucursalNumber != null ? `?sucursal_id=${sucursalNumber}` : '';
+    try {
+      const res = await apiFoodTrucks.get(`${ENDPOINT_BASE}${query}`);
+      const data = await unwrapResponse(res);
+      const fetchedItems = pickList(data).map((x) =>
+        mapProductFromApi(x.producto ?? x, {
+          pending: false,
+          pendingOp: null,
+          sucursal_id:
+            sucursalNumber != null
+              ? sucursalNumber
+              : x?.sucursal_id ?? x?.producto?.sucursal_id,
+        })
+      );
+      const filteredFromBackend = filterBySucursal(
+        fetchedItems,
+        sucursalNumber
+      ).filter((item) => {
+        if (!allowedCategoryIds) return true;
+        const catId = String(item.categoria_id ?? '').trim();
+        if (!catId) return false;
+        return allowedCategoryIds.has(catId);
+      });
 
       await db.transaction('rw', db.products, async () => {
         const pendingLocals = await db.products
@@ -480,11 +589,17 @@ export const productosRepo = {
           .equals(1)
           .toArray();
         const pendingMap = new Map(
-          pendingLocals.map((item) => [item.id, item])
+          pendingLocals
+            .filter((item) =>
+              sucursalNumber == null
+                ? true
+                : Number(item.sucursal_id) === sucursalNumber
+            )
+            .map((item) => [item.id, item])
         );
-        const serverIds = new Set(serverItems.map((item) => item.id));
+        const serverIds = new Set(filteredFromBackend.map((item) => item.id));
 
-        const toPersist = serverItems.map((item) => {
+        const toPersist = filteredFromBackend.map((item) => {
           if (!item.id) return item;
           if (!pendingMap.has(item.id)) return item;
           const local = pendingMap.get(item.id);
@@ -497,28 +612,58 @@ export const productosRepo = {
 
         if (toPersist.length) await db.products.bulkPut(toPersist);
 
-        const staleKeys = await db.products
+        const scopedCollection =
+          sucursalNumber != null
+            ? db.products.where('sucursal_id').equals(sucursalNumber)
+            : db.products;
+        const staleKeys = await scopedCollection
           .filter(
             (p) =>
-              !p.pending &&
-              !p.tempId &&
-              !!p.id &&
-              !serverIds.has(p.id)
+              !p.pending && !p.tempId && !!p.id && !serverIds.has(p.id)
           )
           .primaryKeys();
         if (staleKeys.length) await db.products.bulkDelete(staleKeys);
       });
 
-      const ordered = await db.products
-        .orderBy('updatedAt')
-        .reverse()
-        .toArray();
+      let ordered;
+      if (sucursalNumber != null) {
+        let scoped = await db.products
+          .where('sucursal_id')
+          .equals(sucursalNumber)
+          .toArray();
+        if (allowedCategoryIds) {
+          scoped = scoped.filter((item) => {
+            const catId = String(item.categoria_id ?? '').trim();
+            if (!catId) return false;
+            return allowedCategoryIds.has(catId);
+          });
+        }
+        ordered = sortByUpdatedDesc(scoped);
+      } else {
+        ordered = await db.products.orderBy('updatedAt').reverse().toArray();
+      }
       return { items: ordered, source: 'network' };
     } catch (err) {
-      const cached = await db.products
-        .orderBy('updatedAt')
-        .reverse()
-        .toArray();
+      let cached;
+      if (sucursalNumber != null) {
+        let scoped = await db.products
+          .where('sucursal_id')
+          .equals(sucursalNumber)
+          .toArray();
+        if (allowedCategoryIds) {
+          scoped = scoped.filter((item) => {
+            const catId = String(item.categoria_id ?? '').trim();
+            if (!catId) return false;
+            return allowedCategoryIds.has(catId);
+          });
+        }
+        cached = sortByUpdatedDesc(scoped);
+      } else {
+        cached = await db.products
+          .orderBy('updatedAt')
+          .reverse()
+          .toArray();
+      }
       return { items: cached, source: 'cache' };
     }
   },
@@ -539,6 +684,7 @@ export const productosRepo = {
         estado: form?.estado,
         fecha_creacion: now,
         imagen_url: form?.imagen_url ?? '',
+        sucursal_id: form?.sucursal_id,
       },
       {
         updatedAt: now,
@@ -546,6 +692,7 @@ export const productosRepo = {
         tempId,
         pendingOp: 'create',
         syncedAt: null,
+        sucursal_id: form?.sucursal_id,
       }
     );
 
@@ -572,7 +719,12 @@ export const productosRepo = {
 
       let product = mapProductFromApi(
         { ...data, producto_id: newId },
-        { pending: false, tempId: null, pendingOp: null }
+        {
+          pending: false,
+          tempId: null,
+          pendingOp: null,
+          sucursal_id: form?.sucursal_id,
+        }
       );
 
       if (form?.imagen_file) {
@@ -620,7 +772,12 @@ export const productosRepo = {
       form?.estado !== undefined ? form.estado : prev?.estado
     );
 
-    const base = prev ?? mapProductFromApi({ producto_id: id }, {});
+    const base =
+      prev ??
+      mapProductFromApi(
+        { producto_id: id },
+        { sucursal_id: form?.sucursal_id }
+      );
     const localNext = {
       ...base,
       id,
@@ -640,6 +797,10 @@ export const productosRepo = {
       pendingFlag: 1,
       pendingOp: 'update',
       lastError: null,
+      sucursal_id:
+        form?.sucursal_id != null
+          ? Number(form.sucursal_id)
+          : base?.sucursal_id,
     };
 
     await db.products.put(localNext);

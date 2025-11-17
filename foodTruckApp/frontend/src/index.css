@@ -11,7 +11,9 @@
   --color-info: #4b6584; /* Azul grisáceo elegante (para Editar) */
   --color-peligro: #a45c5c; /* Rojo terracota (para Eliminar/Cancelar) */
   --color-texto: #333333; /* Gris oscuro para texto */
+  --color-texto-suave: #666666; /* Gris medio para textos secundarios */
   --color-placeholder: #bcbcbc; /* Gris claro para inputs y detalles */
+  --color-drag: #74d4ff; /* Gris muy claro para áreas de arrastre */
 }
 
 body {
