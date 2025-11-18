@@ -32,8 +32,8 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
 
   // ---- Modificadores asociados al producto ----
   const [modificadoresDisponibles, setModificadoresDisponibles] = useState([]);
-  const [selectedModIds, setSelectedModIds] = useState([]);
-  const [initialSelectedModIds, setInitialSelectedModIds] = useState([]);
+  const [selectedModIds, setSelectedModIds] = useState([]); // siempre STRINGS
+  const [initialSelectedModIds, setInitialSelectedModIds] = useState([]); // siempre STRINGS
 
   // ---- Paginación ----
   const [page, setPage] = useState(1);
@@ -125,7 +125,8 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
   };
 
   const toggleModificadorSeleccionado = (id) => {
-    setSelectedModIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    const idStr = String(id);
+    setSelectedModIds((prev) => (prev.includes(idStr) ? prev.filter((x) => x !== idStr) : [...prev, idStr]));
   };
 
   const submitProducto = async (e) => {
@@ -177,25 +178,33 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
       try {
         const productoId = productoResult?.producto_id ?? productoResult?.id;
         if (productoId) {
-          const prev = editProdId ? initialSelectedModIds : [];
-          const next = selectedModIds;
+          const prev = editProdId ? initialSelectedModIds || [] : [];
+          const next = selectedModIds || [];
 
-          const prevSet = new Set(prev.map(String));
-          const nextSet = new Set(next.map(String));
+          const prevSet = new Set(prev.map((v) => String(v)));
+          const nextSet = new Set(next.map((v) => String(v)));
 
           const toAdd = next.filter((id) => !prevSet.has(String(id)));
           const toRemove = prev.filter((id) => !nextSet.has(String(id)));
 
+          console.log('[PanelProductos] asociando modificadores', {
+            productoId,
+            prev,
+            next,
+            toAdd,
+            toRemove,
+          });
+
           if (toAdd.length || toRemove.length) {
             await Promise.all([
-              ...toAdd.map((modId) => productoModificadoresRepo.attach(productoId, modId, false)),
-              ...toRemove.map((modId) => productoModificadoresRepo.detach(productoId, modId)),
+              ...toAdd.map((modId) => productoModificadoresRepo.attach(productoId, modId, { sucursalId })),
+              ...toRemove.map((modId) => productoModificadoresRepo.detach(productoId, modId, { sucursalId })),
             ]);
           }
         }
       } catch (errAssoc) {
         console.error('Error asociando modificadores al producto', errAssoc);
-        toast.error('Producto creado, pero hubo un problema al asociar modificadores.');
+        toast.error('Producto guardado, pero hubo un problema al asociar modificadores.');
       }
 
       resetFormProd();
@@ -216,8 +225,13 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
       return;
     }
     try {
-      const list = await productoModificadoresRepo.list(productoId);
-      const ids = list?.map((rel) => rel.modificador_id ?? rel.id).filter(Boolean) ?? [];
+      // 🔹 AHORA filtramos por sucursalId también
+      const list = await productoModificadoresRepo.list(productoId, { sucursalId });
+      const ids =
+        list
+          ?.map((rel) => rel.modificador_id ?? rel.id)
+          .filter((value) => value != null)
+          .map((value) => String(value)) ?? [];
       setSelectedModIds(ids);
       setInitialSelectedModIds(ids);
     } catch (err) {
@@ -242,7 +256,7 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
     setPreviewUrl('');
     if (inputRef.current) inputRef.current.value = '';
 
-    // cargar modificadores asociados
+    // cargar modificadores asociados (por sucursal)
     cargarModificadoresDeProducto(p.producto_id);
 
     sectionRef.current?.scrollIntoView({
@@ -452,7 +466,7 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
           ) : (
             <div className='border border-gray-300 rounded-lg p-2 max-h-44 overflow-y-auto bg-white'>
               {modificadoresDisponibles.map((mod) => {
-                const id = mod.modificador_id ?? mod.id;
+                const id = String(mod.modificador_id ?? mod.id);
                 const checked = selectedModIds.includes(id);
                 return (
                   <label

@@ -158,7 +158,7 @@ export const PanelModificadores = forwardRef(({ empresaId, sucursalId, onModific
     if (!confirmed) return;
     setBusyModId(id);
     try {
-      await modificadoresRepo.remove(id);
+      await modificadoresRepo.remove(id, { hard: true });
       await cargarModificadores();
       toast.success('Modificador eliminado');
     } catch (err) {

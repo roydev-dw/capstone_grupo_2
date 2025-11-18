@@ -170,11 +170,12 @@ export const modificadoresRepo = {
     }
   },
 
-  async remove(modificador_id) {
+  async remove(modificador_id, { hard = false } = {}) {
     const id = String(modificador_id ?? '').trim();
     if (!id) throw new Error('ID de modificador requerido');
     try {
-      await apiFoodTrucks.delete(`${ENDPOINT_BASE}${id}/`);
+      const suffix = hard ? '?hard=1' : '';
+      await apiFoodTrucks.delete(`${ENDPOINT_BASE}${id}/${suffix}`);
     } catch (err) {
       const msg = formatErrorMessage(err, 'No se pudo eliminar el modificador');
       const error = new Error(msg);
