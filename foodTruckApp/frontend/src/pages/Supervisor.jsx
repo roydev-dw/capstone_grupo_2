@@ -19,6 +19,7 @@ import { PiUserCirclePlusFill } from 'react-icons/pi';
 import { TbCategoryPlus, TbAdjustments } from 'react-icons/tb';
 import { AiOutlineProduct } from 'react-icons/ai';
 import { FiChevronDown } from 'react-icons/fi';
+import { categoriasRepo } from '../utils/repoCategorias';
 
 export const Supervisor = () => {
   const navigate = useNavigate();
@@ -144,6 +145,34 @@ export const Supervisor = () => {
   useEffect(() => {
     setCategoriasActivas([]);
     if (!sucursalId) setOpenPanel(null);
+  }, [sucursalId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCategoriasActivas([]);
+    if (!sucursalId) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    (async () => {
+      try {
+        const { items } = await categoriasRepo.list({ sucursalId });
+        if (!cancelled) {
+          setCategoriasActivas(items);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('No se pudieron cargar las categorías para la sucursal seleccionada.', err);
+          setCategoriasActivas([]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [sucursalId]);
 
   const logout = () => {
