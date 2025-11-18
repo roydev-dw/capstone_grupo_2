@@ -8,7 +8,7 @@ import { userSchema } from '../validations/userValidation';
 import { FaRegEye, FaRegEyeSlash } from 'react-icons/fa';
 import { IoClose } from 'react-icons/io5';
 
-export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose }) => {
+export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose, allowedSucursalIds = [] }) => {
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDisabled, setShowDisabled] = useState(false);
@@ -37,6 +37,19 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
 
   // ref para detectar click fuera del dropdown
   const dropdownRef = useRef(null);
+
+  // permisos: admin tiene CRUD, y el supervisor también si tiene sucursales asignadas
+  const canCrud = isAdmin || (Array.isArray(allowedSucursalIds) && allowedSucursalIds.length > 0);
+
+  const allowedSucursalIdsNum = Array.isArray(allowedSucursalIds)
+    ? allowedSucursalIds.map((v) => Number(v)).filter((n) => Number.isFinite(n))
+    : [];
+
+  // IDs de roles "Vendedor" (por si cambia el ID en la base)
+  const vendedorRoleIds = roles
+    .filter((r) => (r?.nombre || '').trim() === 'Vendedor')
+    .map((r) => Number(r.id))
+    .filter((n) => Number.isFinite(n));
 
   const cargarUsuarios = async () => {
     console.log('[PanelUsuarios] cargarUsuarios()', {
@@ -86,7 +99,7 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
 
       const filtrados = porSucursal
         .filter((u) => (showDisabled ? true : u.estado !== false))
-        .filter((u) => Number(u.rol_id) !== 1);
+        .filter((u) => Number(u.rol_id) !== 1); // sigue excluyendo admin
 
       console.log('[PanelUsuarios] usuarios después de filtrar (sin admin / estado):', filtrados);
 
@@ -184,7 +197,7 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
     e.preventDefault();
     console.log('[PanelUsuarios] submitUsuario()', { form, empresaId, sucursalId });
 
-    if (!isAdmin) return toast.error('Solo el administrador puede realizar esta acción.');
+    if (!canCrud) return toast.error('No tienes permisos para crear o editar usuarios.');
 
     try {
       await userSchema.validate(form, { abortEarly: true });
@@ -202,9 +215,15 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
 
     const empresaFinal = Number(form.empresa_id || empresaId);
 
-    const selectedSucursales = Array.isArray(form.sucursales_ids)
+    const allowedSet = new Set(allowedSucursalIdsNum);
+
+    let selectedSucursales = Array.isArray(form.sucursales_ids)
       ? form.sucursales_ids.map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0)
       : [];
+
+    if (allowedSet.size > 0) {
+      selectedSucursales = selectedSucursales.filter((id) => allowedSet.has(id));
+    }
 
     const sucursalPrincipal = selectedSucursales[0] ?? (form.sucursal_id ? Number(form.sucursal_id) : null);
 
@@ -214,12 +233,35 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
       ? [sucursalPrincipal]
       : [];
 
+    if (allowedSet.size > 0 && !sucursalesPayload.length) {
+      setSaving(false);
+      const msg = 'Debes asignar al menos una sucursal que tengas asignada como supervisor.';
+      setErrorMsg(msg);
+      toast.error(msg);
+      return;
+    }
+
+    // 🔒 Rol: el supervisor solo puede crear/editar Vendedores
+    let rolIdNumber = Number(form.rol_id);
+
+    if (!isAdmin) {
+      if (!vendedorRoleIds.length) {
+        const msg = 'No se encontró el rol "Vendedor" para asignar. Contacta a un administrador.';
+        setErrorMsg(msg);
+        toast.error(msg);
+        setSaving(false);
+        return;
+      }
+      // Forzamos rol vendedor
+      rolIdNumber = vendedorRoleIds[0];
+    }
+
     console.log('[PanelUsuarios] Payload a enviar al backend:', {
       editId,
       empresaFinal,
       sucursalPrincipal,
       sucursalesPayload,
-      rol_id: Number(form.rol_id),
+      rol_id: rolIdNumber,
     });
 
     try {
@@ -229,7 +271,7 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
           empresa_id: empresaFinal,
           sucursal_id: sucursalPrincipal,
           sucursales: sucursalesPayload,
-          rol_id: Number(form.rol_id),
+          rol_id: rolIdNumber,
         });
         toast.success(`Usuario ${nombre} actualizado`);
       } else {
@@ -238,7 +280,7 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
           empresa_id: empresaFinal,
           sucursal_id: sucursalPrincipal,
           sucursales: sucursalesPayload,
-          rol_id: Number(form.rol_id),
+          rol_id: rolIdNumber,
         });
         toast.success(`Usuario ${nombre} creado`);
       }
@@ -282,7 +324,9 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
 
   const habilitar = async (u) => {
     console.log('[PanelUsuarios] habilitar()', u);
-    if (!isAdmin) return toast.error('Solo el administrador puede realizar esta acción.');
+    if (!canCrud || !puedeGestionarUsuario(u)) {
+      return toast.error('No tienes permisos para gestionar este usuario.');
+    }
     setBusyId(u.id);
     try {
       await usuariosRepo.patch(u.id, { estado: true });
@@ -298,7 +342,9 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
 
   const deshabilitar = async (u) => {
     console.log('[PanelUsuarios] deshabilitar()', u);
-    if (!isAdmin) return toast.error('Solo el administrador puede realizar esta acción.');
+    if (!canCrud || !puedeGestionarUsuario(u)) {
+      return toast.error('No tienes permisos para gestionar este usuario.');
+    }
     if (!confirm('Esto deshabilitará el usuario. ¿Continuar?')) return;
     setBusyId(u.id);
     try {
@@ -315,7 +361,9 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
 
   const eliminar = async (u) => {
     console.log('[PanelUsuarios] eliminar()', u);
-    if (!isAdmin) return toast.error('Solo el administrador puede realizar esta acción.');
+    if (!canCrud || !puedeGestionarUsuario(u)) {
+      return toast.error('No tienes permisos para gestionar este usuario.');
+    }
     if (!confirm('Esto eliminará el usuario definitivamente. ¿Continuar?')) return;
     setBusyId(u.id);
     try {
@@ -330,8 +378,20 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
     }
   };
 
-  const sucursalesFiltradas = sucursales;
-  const rolesLimitados = roles.filter((r) => ['Supervisor', 'Vendedor'].includes((r.nombre || '').trim()));
+  const sucursalesFiltradas =
+    allowedSucursalIdsNum.length > 0
+      ? sucursales.filter((s) => allowedSucursalIdsNum.includes(Number(s.id)))
+      : sucursales;
+
+  // Admin: puede asignar Supervisor y Vendedor
+  // Supervisor: solo puede asignar Vendedor
+  const rolesLimitados = roles.filter((r) => {
+    const nombre = (r.nombre || '').trim();
+    if (isAdmin) {
+      return ['Supervisor', 'Vendedor'].includes(nombre);
+    }
+    return nombre === 'Vendedor';
+  });
 
   if (!sucursalId) {
     console.log('[PanelUsuarios] Render sin sucursalId, mostrando mensaje de selección');
@@ -370,6 +430,36 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
 
   const isSucursalChecked = (id) => Array.isArray(form.sucursales_ids) && form.sucursales_ids.includes(String(id));
 
+  // 🔒 Lógica de autorización por usuario:
+  // - Admin: puede gestionar todos (excepto admin filtrado por arriba)
+  // - Supervisor: solo puede gestionar Vendedores en sus sucursales
+  const puedeGestionarUsuario = (u) => {
+    if (!canCrud) return false;
+
+    if (!isAdmin) {
+      const nombreRol = (u.rol_nombre || '').trim();
+      const rolIdNumber = Number(u.rol_id);
+      const esVendedorPorNombre = nombreRol === 'Vendedor';
+      const esVendedorPorId = vendedorRoleIds.includes(rolIdNumber);
+      if (!esVendedorPorNombre && !esVendedorPorId) {
+        // No es vendedor: no se puede gestionar
+        return false;
+      }
+    }
+
+    if (!allowedSucursalIdsNum.length) return true; // admin sin restricciones de sucursal
+
+    const sucursalesUsuario = [
+      ...(Array.isArray(u.sucursales_ids) ? u.sucursales_ids : []),
+      u.sucursal_id ?? u.sucursalId ?? null,
+    ]
+      .filter((v) => v != null)
+      .map((v) => Number(v))
+      .filter((n) => Number.isFinite(n));
+
+    return sucursalesUsuario.some((id) => allowedSucursalIdsNum.includes(id));
+  };
+
   return (
     <section className='bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6'>
       <div className='flex items-center justify-between gap-4'>
@@ -387,9 +477,9 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
         )}
       </div>
 
-      {!isAdmin && (
+      {!canCrud && (
         <div className='rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800'>
-          Solo el administrador puede crear/editar/eliminar usuarios. Puedes visualizar el listado.
+          Solo tienes permisos de lectura sobre los usuarios. Contacta a un administrador para modificar permisos.
         </div>
       )}
 
@@ -402,7 +492,7 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
             value={form.nombre_completo}
             onChange={(e) => setForm((f) => ({ ...f, nombre_completo: e.target.value }))}
             className='border border-gray-300 rounded-lg px-3 py-2 w-full'
-            disabled={!isAdmin}
+            disabled={!canCrud}
           />
         </div>
 
@@ -414,7 +504,7 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
             value={form.email}
             onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
             className='border border-gray-300 rounded-lg px-3 py-2 w-full'
-            disabled={!isAdmin}
+            disabled={!canCrud}
           />
         </div>
 
@@ -426,7 +516,7 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
             onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
             placeholder={editId ? 'Debe cambiar la contraseña' : 'Ej: Admin@2025'}
             className='border border-gray-300 rounded-lg px-3 py-2 w-full pr-10'
-            disabled={!isAdmin}
+            disabled={!canCrud}
           />
           <button
             type='button'
@@ -445,7 +535,7 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
             value={form.telefono}
             onChange={(e) => setForm((f) => ({ ...f, telefono: e.target.value }))}
             className='border border-gray-300 rounded-lg px-3 py-2 w-full'
-            disabled={!isAdmin}
+            disabled={!canCrud}
           />
         </div>
 
@@ -455,7 +545,7 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
 
           <button
             type='button'
-            disabled={!isAdmin}
+            disabled={!canCrud}
             onClick={() => setOpenSucursales((o) => !o)}
             className='border border-gray-300 rounded-lg px-3 py-2 w-full flex items-center justify-between text-sm bg-white disabled:bg-gray-100'>
             <span className={form.sucursales_ids && form.sucursales_ids.length ? 'text-gray-900' : 'text-gray-400'}>
@@ -478,7 +568,7 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
                       className='flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-50 cursor-pointer'>
                       <input
                         type='checkbox'
-                        disabled={!isAdmin}
+                        disabled={!canCrud}
                         checked={isSucursalChecked(s.id)}
                         onChange={() => toggleSucursalEnForm(s.id)}
                       />
@@ -501,7 +591,7 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
             value={form.rol_id}
             onChange={(e) => setForm((f) => ({ ...f, rol_id: e.target.value }))}
             className='border border-gray-300 rounded-lg px-3 py-2 w-full'
-            disabled={!isAdmin}>
+            disabled={!canCrud}>
             <option value=''>Seleccione rol</option>
             {rolesLimitados.map((r) => (
               <option key={r.id} value={r.id}>
@@ -517,14 +607,14 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
             value={form.estado ? '1' : '0'}
             onChange={(e) => setForm((f) => ({ ...f, estado: e.target.value === '1' }))}
             className='border border-gray-300 rounded-lg px-3 py-2 w-full'
-            disabled={!isAdmin}>
+            disabled={!canCrud}>
             <option value='1'>Activo</option>
             <option value='0'>Inactivo</option>
           </select>
         </div>
 
         <div className='md:col-span-12 flex justify-between gap-2'>
-          <Button type='submit' disabled={!isAdmin || saving} color='primario'>
+          <Button type='submit' disabled={!canCrud || saving} color='primario'>
             {editId ? 'Guardar cambios' : 'Crear usuario'}
           </Button>
           {editId && (
@@ -565,21 +655,30 @@ export const PanelUsuarios = ({ empresaId, sucursalId, isAdmin = false, onClose 
                 <td className='px-4 py-2 text-sm text-gray-700'>{u.rol_nombre ?? u.rol_id ?? '—'}</td>
                 <td className='px-4 py-2 text-sm text-gray-700'>{u.telefono ?? '—'}</td>
                 <td className='px-4 py-2 text-right space-x-2'>
-                  <Button onClick={() => startEdit(u)} disabled={!isAdmin || !!busyId} color='info'>
+                  <Button onClick={() => startEdit(u)} disabled={!puedeGestionarUsuario(u) || !!busyId} color='info'>
                     Editar
                   </Button>
 
                   {u.estado !== false ? (
-                    <Button onClick={() => deshabilitar(u)} disabled={!isAdmin || busyId === u.id} color='neutral'>
+                    <Button
+                      onClick={() => deshabilitar(u)}
+                      disabled={!puedeGestionarUsuario(u) || busyId === u.id}
+                      color='neutral'>
                       Deshabilitar
                     </Button>
                   ) : (
-                    <Button onClick={() => habilitar(u)} disabled={!isAdmin || busyId === u.id} color='neutral'>
+                    <Button
+                      onClick={() => habilitar(u)}
+                      disabled={!puedeGestionarUsuario(u) || busyId === u.id}
+                      color='neutral'>
                       Habilitar
                     </Button>
                   )}
 
-                  <Button onClick={() => eliminar(u)} disabled={!isAdmin || busyId === u.id} color='peligro'>
+                  <Button
+                    onClick={() => eliminar(u)}
+                    disabled={!puedeGestionarUsuario(u) || busyId === u.id}
+                    color='peligro'>
                     Eliminar
                   </Button>
                 </td>

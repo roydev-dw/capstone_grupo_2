@@ -174,7 +174,14 @@ export const Supervisor = () => {
         className: 'text-secundario',
         ref: usuariosRef,
         render: () => (
-          <PanelUsuarios empresaId={empresaId} sucursalId={sucursalId} isAdmin={false} onClose={() => setOpenPanel(null)} />
+          <PanelUsuarios
+            empresaId={empresaId}
+            sucursalId={sucursalId}
+            // El supervisor puede hacer CRUD, pero solo en sus sucursales
+            isAdmin={false}
+            allowedSucursalIds={supervisorSucursalIds}
+            onClose={() => setOpenPanel(null)}
+          />
         ),
       },
       {
@@ -200,7 +207,9 @@ export const Supervisor = () => {
         icon: TbAdjustments,
         className: 'text-amber-500',
         ref: modificadoresRef,
-        render: () => <PanelModificadores empresaId={empresaId} sucursalId={sucursalId} onClose={() => setOpenPanel(null)} />,
+        render: () => (
+          <PanelModificadores empresaId={empresaId} sucursalId={sucursalId} onClose={() => setOpenPanel(null)} />
+        ),
       },
       {
         id: 'productos',
@@ -220,7 +229,7 @@ export const Supervisor = () => {
         ),
       },
     ],
-    [categoriasActivas, empresaId, sucursalId, sucursalNombre]
+    [categoriasActivas, empresaId, sucursalId, sucursalNombre, supervisorSucursalIds]
   );
 
   const togglePanel = (id) => {
@@ -349,7 +358,9 @@ const AccordionRow = ({ panel, isOpen, onToggle, isDisabled }) => {
   const Icon = panel.icon;
 
   return (
-    <article ref={panel.ref} className='rounded-2xl border border-placeholder bg-elemento shadow-sm ring-1 ring-black/5'>
+    <article
+      ref={panel.ref}
+      className='rounded-2xl border border-placeholder bg-elemento shadow-sm ring-1 ring-black/5'>
       <button
         type='button'
         disabled={isDisabled}
