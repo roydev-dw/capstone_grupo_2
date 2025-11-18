@@ -11,6 +11,7 @@ import { PedidoActual } from '../components/vendedor/PedidoActual';
 import { BotonTarjeta } from '../components/vendedor/BotonTarjeta';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { categoriasRepo } from '../utils/repoCategorias';
+import { productoModificadoresRepo } from '../utils/repoProductoModificador';
 import { EMPRESA_PUNTO_SABOR_ID, perteneceAEmpresa } from '../utils/empresas';
 
 // --- helper para normalizar respuestas {results:[]}, {data:{results:[]}}, [] ---
@@ -32,6 +33,82 @@ const resolveImg = (u) => {
   return base ? `${base}/${path}` : `/${path}`;
 };
 
+const DEFAULT_OPTION_GROUP = 'Agregados';
+
+const buildOptionsFromModificadores = (items = []) => {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  const groups = new Map();
+  items.forEach((rel) => {
+    const source = rel?.modificador ?? rel ?? {};
+    const rawGroup = source?.tipo ?? rel?.tipo ?? '';
+    const groupName = String(rawGroup || DEFAULT_OPTION_GROUP).trim() || DEFAULT_OPTION_GROUP;
+    const choiceId =
+      String(source?.modificador_id ?? source?.id ?? rel?.modificador_id ?? rel?.id ?? source?.nombre ?? '').trim() ||
+      source?.nombre ||
+      '';
+    const choiceName = source?.nombre ?? rel?.nombre ?? `Opción ${choiceId || ''}`.trim();
+    const extraPriceRaw = source?.valor_adicional ?? rel?.valor_adicional ?? 0;
+    const extraPrice = Number.isFinite(Number(extraPriceRaw)) ? Number(extraPriceRaw) : 0;
+
+    if (!choiceName) return;
+    if (!groups.has(groupName)) groups.set(groupName, []);
+    groups.get(groupName).push({
+      id: choiceId || `${groupName}-${choiceName}`,
+      name: choiceName,
+      extraPrice,
+    });
+  });
+
+  const options = [];
+  for (const [groupName, choices] of groups.entries()) {
+    if (!choices.length) continue;
+    const normalizedGroup = groupName || DEFAULT_OPTION_GROUP;
+    const sorted = choices.sort((a, b) => a.name.localeCompare(b.name));
+    const defaultChoice = {
+      id: `none-${normalizedGroup}`.toLowerCase(),
+      name: `Sin ${normalizedGroup.toLowerCase()}`,
+      extraPrice: 0,
+    };
+    const hasZeroChoice = sorted.some(
+      (choice) => choice.extraPrice === 0 && choice.name.toLowerCase().startsWith('sin')
+    );
+    const finalChoices = hasZeroChoice ? sorted : [defaultChoice, ...sorted];
+    options.push({
+      name: normalizedGroup,
+      choices: finalChoices,
+    });
+  }
+
+  return options;
+};
+
+const normalizeSucursalId = (valor) => {
+  if (valor == null || valor === '') return null;
+  const num = Number(valor);
+  return Number.isFinite(num) ? num : null;
+};
+
+const deriveSucursalIdFromUser = (usuario) => {
+  if (!usuario) return null;
+  const candidatos = [
+    usuario.sucursal_id,
+    usuario.sucursalId,
+    ...(Array.isArray(usuario.sucursales_ids) ? usuario.sucursales_ids : []),
+    ...(Array.isArray(usuario.sucursales) ? usuario.sucursales : []),
+  ];
+  for (const candidato of candidatos) {
+    const id = normalizeSucursalId(candidato?.id ?? candidato?.sucursal_id ?? candidato);
+    if (id != null) return id;
+  }
+  try {
+    const persisted = localStorage.getItem('vendorSucursalId');
+    const parsed = normalizeSucursalId(persisted);
+    if (parsed != null) return parsed;
+  } catch {}
+  return null;
+};
+
 export const Vendedor = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -50,7 +127,15 @@ export const Vendedor = () => {
       return null;
     }
   }, [user]);
-  const sucursalId = sessionUser?.sucursal_id ?? sessionUser?.sucursalId ?? null;
+  const sucursalId = useMemo(() => {
+    const derived = deriveSucursalIdFromUser(sessionUser);
+    if (derived != null) {
+      try {
+        localStorage.setItem('vendorSucursalId', String(derived));
+      } catch {}
+    }
+    return derived;
+  }, [sessionUser]);
 
   useEffect(() => {
     if (!sessionUser) return;
@@ -75,6 +160,7 @@ export const Vendedor = () => {
         price: Number(p.precio_base || 0),
         image: resolveImg(p.imagen_url || ''),
         category: p.categoria_nombre?.trim() || 'Sin categoria',
+        options: Array.isArray(p.options) ? p.options : [],
       }));
   }, [productosDB]);
 
@@ -121,6 +207,45 @@ export const Vendedor = () => {
     return (producto.price || 0) + extras;
   }, []);
 
+  const ensureOptionsForProduct = useCallback(
+    async (producto) => {
+      if (!producto) return producto;
+
+      // Si ya tiene options precargadas, las usamos
+      if (Array.isArray(producto.options) && producto.options.length > 0) {
+        return { ...producto, options: producto.options };
+      }
+
+      const productoId = producto.producto_id ?? producto.id;
+      if (!productoId) return { ...producto, options: [] };
+
+      try {
+        const relaciones = await productoModificadoresRepo.list(productoId, {
+          sucursalId, // 👈 clave: pedimos solo los modificadores de esta sucursal
+        });
+
+        const opciones = buildOptionsFromModificadores(relaciones);
+
+        console.log('[Vendedor] Modificadores obtenidos desde endpoint de producto', {
+          productoId,
+          sucursalId,
+          cantidad: opciones.length,
+          opciones,
+        });
+
+        return { ...producto, options: opciones };
+      } catch (err) {
+        console.error('[Vendedor] No se pudieron cargar modificadores para el producto', {
+          productoId,
+          sucursalId,
+          err,
+        });
+        return { ...producto, options: [] };
+      }
+    },
+    [sucursalId]
+  );
+
   useEffect(() => {
     const syncProductos = async () => {
       try {
@@ -162,25 +287,39 @@ export const Vendedor = () => {
           ids: filtradosPorCategoria.map((item) => item.producto_id ?? item.id),
         });
 
-        const normalizados = filtradosPorCategoria.map((r) => {
-          const productoId = String(r.producto_id ?? r.id ?? '');
-          const categoriaId = String(r.categoria_id ?? 'sin-categoria');
+        const normalizados = filtradosPorCategoria.map((raw) => {
+          const productoId = String(raw.producto_id ?? raw.id ?? '');
+          const categoriaId = String(raw.categoria_id ?? 'sin-categoria');
           const updatedAt =
-            r.updated_at ?? r.updatedAt ?? r.fecha_actualizacion ?? r.fecha_creacion ?? new Date().toISOString();
+            raw.updated_at ??
+            raw.updatedAt ??
+            raw.fecha_actualizacion ??
+            raw.fecha_creacion ??
+            new Date().toISOString();
           const syncedAt = new Date().toISOString();
-          const sucursalAsignada = r.sucursal_id != null ? Number(r.sucursal_id) : Number(sucursalId);
+          const sucursalAsignada = raw.sucursal_id != null ? Number(raw.sucursal_id) : Number(sucursalId);
+          const opcionesInline = Array.isArray(raw.modificadores)
+            ? buildOptionsFromModificadores(raw.modificadores)
+            : [];
+          if (opcionesInline.length) {
+            console.log('[Vendedor] Modificadores precargados para producto', {
+              productoId,
+              cantidad: opcionesInline.length,
+              opciones: opcionesInline,
+            });
+          }
           return {
             id: productoId,
             producto_id: productoId,
             categoria_id: categoriaId,
-            categoria_nombre: r.categoria_nombre ?? 'Sin categoria',
-            nombre: r.nombre ?? '',
-            descripcion: r.descripcion ?? '',
-            precio_base: Number(r.precio_base ?? 0),
-            tiempo_preparacion: Number(r.tiempo_preparacion ?? 0),
-            estado: r.estado !== false,
-            fecha_creacion: r.fecha_creacion || updatedAt,
-            imagen_url: r.imagen_url ?? r.imagen ?? '',
+            categoria_nombre: raw.categoria_nombre ?? 'Sin categoria',
+            nombre: raw.nombre ?? '',
+            descripcion: raw.descripcion ?? '',
+            precio_base: Number(raw.precio_base ?? 0),
+            tiempo_preparacion: Number(raw.tiempo_preparacion ?? 0),
+            estado: raw.estado !== false,
+            fecha_creacion: raw.fecha_creacion || updatedAt,
+            imagen_url: raw.imagen_url ?? raw.imagen ?? '',
             updatedAt,
             pending: false,
             tempId: null,
@@ -188,6 +327,7 @@ export const Vendedor = () => {
             lastError: null,
             pendingOp: null,
             sucursal_id: sucursalAsignada,
+            options: opcionesInline,
           };
         });
 
@@ -205,22 +345,6 @@ export const Vendedor = () => {
 
     syncProductos();
   }, [sucursalId]);
-
-  const handleProductClick = useCallback((producto) => {
-    if (producto.options && producto.options.length > 0) {
-      setProductoSeleccionado(producto);
-    } else {
-      handleAddCarrito({ ...producto, quantity: 1 });
-    }
-  }, []);
-
-  const handleEditarItem = useCallback(
-    (idItemCarrito) => {
-      const item = carrito.find((i) => i.idItemCarrito === idItemCarrito);
-      if (item) setItemParaEditar(item);
-    },
-    [carrito]
-  );
 
   const handleAddCarrito = useCallback(
     async (productoAgregado) => {
@@ -251,6 +375,45 @@ export const Vendedor = () => {
       setProductoSeleccionado(null);
     },
     [calcularPrecioFinalUnitario, generarIdItemCarrito]
+  );
+
+  const handleProductClick = useCallback(
+    (producto) => {
+      (async () => {
+        const withOptions = await ensureOptionsForProduct(producto);
+        if (withOptions.options && withOptions.options.length > 0) {
+          setProductoSeleccionado(withOptions);
+        } else {
+          handleAddCarrito({ ...withOptions, quantity: 1 });
+        }
+      })();
+    },
+    [ensureOptionsForProduct, handleAddCarrito]
+  );
+
+  const handleEditarItem = useCallback(
+    (idItemCarrito) => {
+      (async () => {
+        const item = carrito.find((i) => i.idItemCarrito === idItemCarrito);
+        if (!item) return;
+        const baseProducto = productosUI.find((p) => String(p.id) === String(item.id)) ??
+          productosDB.find((p) => String(p.producto_id ?? p.id) === String(item.id)) ?? {
+            id: item.id,
+            producto_id: item.id,
+            name: item.name,
+            price: item.price,
+            image: item.image ?? '',
+            category: item.category ?? '',
+            options: item.options ?? [],
+          };
+        const withOptions = await ensureOptionsForProduct(baseProducto);
+        setItemParaEditar({
+          ...withOptions,
+          ...item,
+        });
+      })();
+    },
+    [carrito, productosUI, productosDB, ensureOptionsForProduct]
   );
 
   const handleActualizarItemEnCarrito = useCallback(
@@ -418,7 +581,3 @@ export const Vendedor = () => {
     </div>
   );
 };
-
-
-
-

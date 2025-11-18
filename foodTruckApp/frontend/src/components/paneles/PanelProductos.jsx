@@ -32,8 +32,8 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
 
   // ---- Modificadores asociados al producto ----
   const [modificadoresDisponibles, setModificadoresDisponibles] = useState([]);
-  const [selectedModIds, setSelectedModIds] = useState([]); // siempre STRINGS
-  const [initialSelectedModIds, setInitialSelectedModIds] = useState([]); // siempre STRINGS
+  const [selectedModIds, setSelectedModIds] = useState([]);
+  const [initialSelectedModIds, setInitialSelectedModIds] = useState([]);
 
   // ---- Paginación ----
   const [page, setPage] = useState(1);
@@ -189,6 +189,7 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
 
           console.log('[PanelProductos] asociando modificadores', {
             productoId,
+            sucursalId,
             prev,
             next,
             toAdd,
@@ -225,7 +226,6 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
       return;
     }
     try {
-      // 🔹 AHORA filtramos por sucursalId también
       const list = await productoModificadoresRepo.list(productoId, { sucursalId });
       const ids =
         list
@@ -256,7 +256,7 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
     setPreviewUrl('');
     if (inputRef.current) inputRef.current.value = '';
 
-    // cargar modificadores asociados (por sucursal)
+    // cargar modificadores asociados
     cargarModificadoresDeProducto(p.producto_id);
 
     sectionRef.current?.scrollIntoView({
