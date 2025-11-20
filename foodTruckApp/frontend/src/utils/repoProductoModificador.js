@@ -1,4 +1,3 @@
-// src/utils/repoProductoModificadores.js
 import { apiFoodTrucks } from './api';
 
 const getErrorDetail = (err) => err?.response?.data?.detail || err?.response?.data?.message || err?.message || '';
@@ -10,8 +9,14 @@ const normalizeId = (value) => {
 };
 
 const normalizeList = (productoId, res) => {
-  const data = res?.data;
-  const raw = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+  const payload = res?.data ?? res;
+  const raw = Array.isArray(payload?.results)
+    ? payload.results
+    : Array.isArray(payload?.items)
+    ? payload.items
+    : Array.isArray(payload)
+    ? payload
+    : [];
 
   return raw.map((item) => {
     const modId =
@@ -58,7 +63,6 @@ const buildQuery = (options = {}) => {
 };
 
 export const productoModificadoresRepo = {
-  // AHORA acepta un segundo parámetro options (por ejemplo { sucursalId })
   async list(productoId, options = {}) {
     const id = String(productoId ?? '').trim();
     if (!id) throw new Error('ID de producto requerido');
@@ -75,15 +79,14 @@ export const productoModificadoresRepo = {
 
     const { es_obligatorio, sucursal_id } = mapOptions(options);
     const body = {
-      modificador_id: mid,
+      modificador_id: Number(mid),
       es_obligatorio,
     };
     if (sucursal_id != null) body.sucursal_id = sucursal_id;
 
     try {
-      // Usamos PUT porque tu backend lo está aceptando así
-      const res = await apiFoodTrucks.put(`v1/productos/${pid}/modificadores/`, body);
-      const list = normalizeList(pid, { data: res.data });
+      const res = await apiFoodTrucks.post(`v1/productos/${pid}/modificadores/`, body);
+      const list = normalizeList(pid, res);
       return list[0] ?? { producto_id: Number(pid), modificador_id: Number(mid) };
     } catch (err) {
       const detail = getErrorDetail(err);
@@ -105,13 +108,13 @@ export const productoModificadoresRepo = {
 
     const { es_obligatorio, sucursal_id } = mapOptions(options);
     const body = {
-      modificador_id: mid,
+      modificador_id: Number(mid),
       es_obligatorio,
     };
     if (sucursal_id != null) body.sucursal_id = sucursal_id;
 
     const res = await apiFoodTrucks.put(`v1/productos/${pid}/modificadores/`, body);
-    const list = normalizeList(pid, { data: res.data });
+    const list = normalizeList(pid, res);
     return list[0] ?? { producto_id: Number(pid), modificador_id: Number(mid) };
   },
 
@@ -121,10 +124,42 @@ export const productoModificadoresRepo = {
     if (!pid || !mid) throw new Error('Producto o modificador inválido');
 
     const { sucursal_id } = mapOptions(options);
-    const body = { modificador_id: mid };
+    const body = { modificador_id: Number(mid) };
     if (sucursal_id != null) body.sucursal_id = sucursal_id;
 
-    const res = await apiFoodTrucks.delete(`v1/productos/${pid}/modificadores/`, { data: body });
-    return res.data ?? { producto_id: Number(pid), modificador_id: Number(mid) };
+    const res = await apiFoodTrucks.delete(`v1/productos/${pid}/modificadores/`, body);
+    return res ?? { producto_id: Number(pid), modificador_id: Number(mid) };
+  },
+
+  /**
+   * Reemplaza TODAS las asociaciones de modificadores de un producto
+   * por la lista que se pasa en `nuevosModificadores`.
+   *
+   * nuevosModificadores: array de IDs (number|string), ej: [1, 3, 5]
+   */
+  async replaceAll(productoId, nuevosModificadores, options = {}) {
+    const pid = String(productoId ?? '').trim();
+    if (!pid) throw new Error('ID de producto requerido');
+
+    // 1) Obtener asociaciones actuales
+    const actuales = await this.list(pid, options);
+
+    const actualesIds = [...new Set(actuales.map((m) => Number(m.modificador_id)).filter((x) => !Number.isNaN(x)))];
+
+    // 2) Hacer detach de TODOS los modificadores actuales
+    for (const mid of actualesIds) {
+      await this.detach(pid, mid, options);
+    }
+
+    // 3) Normalizar y dejar únicos los nuevos IDs
+    const nuevosIds = [...new Set((nuevosModificadores || []).map((x) => Number(x)).filter((x) => !Number.isNaN(x)))];
+
+    // 4) Hacer attach de TODOS los nuevos modificadores
+    for (const mid of nuevosIds) {
+      await this.attach(pid, mid, options);
+    }
+
+    // 5) Devolver el estado final
+    return this.list(pid, options);
   },
 };

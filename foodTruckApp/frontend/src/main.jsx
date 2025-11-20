@@ -73,10 +73,7 @@ const AppRouter = () => {
           }
         />
         {/* RUTA 403 PUBLICA (sin guard) */}
-        <Route
-          path='/403'
-          element={<AccesoProhibido />}
-        />
+        <Route path='/403' element={<AccesoProhibido />} />
 
         {/* Protegidas por rol */}
         <Route
@@ -104,10 +101,7 @@ const AppRouter = () => {
         <Route
           path='/panel'
           element={
-            <RutaProtegida
-              allow={['supervisor']}
-              allowCompanies={[EMPRESA_PUNTO_SABOR_ID]}
-              forbiddenTo='/403'>
+            <RutaProtegida allow={['supervisor']} allowCompanies={[EMPRESA_PUNTO_SABOR_ID]} forbiddenTo='/403'>
               <PanelOperaciones />
             </RutaProtegida>
           }
@@ -115,24 +109,13 @@ const AppRouter = () => {
         <Route
           path='/admin'
           element={
-            <RutaProtegida
-              allow={['administrador']}
-              allowCompanies={[EMPRESA_PUNTO_SABOR_ID]}
-              forbiddenTo='/403'>
+            <RutaProtegida allow={['administrador']} allowCompanies={[EMPRESA_PUNTO_SABOR_ID]} forbiddenTo='/403'>
               <Administrador />
             </RutaProtegida>
           }
         />
         {/* Catch-all al final */}
-        <Route
-          path='*'
-          element={
-            <Navigate
-              to='/403'
-              replace
-            />
-          }
-        />
+        <Route path='*' element={<Navigate to='/403' replace />} />
       </Routes>
     </BrowserRouter>
   );

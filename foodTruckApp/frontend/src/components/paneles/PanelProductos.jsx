@@ -33,7 +33,7 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
   // ---- Modificadores asociados al producto ----
   const [modificadoresDisponibles, setModificadoresDisponibles] = useState([]);
   const [selectedModIds, setSelectedModIds] = useState([]);
-  const [initialSelectedModIds, setInitialSelectedModIds] = useState([]);
+  const [loadingSelectedMods, setLoadingSelectedMods] = useState(false);
 
   // ---- Paginación ----
   const [page, setPage] = useState(1);
@@ -120,7 +120,6 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
     });
     setPreviewUrl('');
     setSelectedModIds([]);
-    setInitialSelectedModIds([]);
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -174,34 +173,11 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
         toast.success(`Producto ${productoResult?.nombre ?? nombre} creado`);
       }
 
-      // Asociar modificadores al producto
+      // Asociar modificadores al producto (reemplaza todas las asociaciones)
       try {
         const productoId = productoResult?.producto_id ?? productoResult?.id;
         if (productoId) {
-          const prev = editProdId ? initialSelectedModIds || [] : [];
-          const next = selectedModIds || [];
-
-          const prevSet = new Set(prev.map((v) => String(v)));
-          const nextSet = new Set(next.map((v) => String(v)));
-
-          const toAdd = next.filter((id) => !prevSet.has(String(id)));
-          const toRemove = prev.filter((id) => !nextSet.has(String(id)));
-
-          console.log('[PanelProductos] asociando modificadores', {
-            productoId,
-            sucursalId,
-            prev,
-            next,
-            toAdd,
-            toRemove,
-          });
-
-          if (toAdd.length || toRemove.length) {
-            await Promise.all([
-              ...toAdd.map((modId) => productoModificadoresRepo.attach(productoId, modId, { sucursalId })),
-              ...toRemove.map((modId) => productoModificadoresRepo.detach(productoId, modId, { sucursalId })),
-            ]);
-          }
+          await productoModificadoresRepo.replaceAll(productoId, selectedModIds, { sucursalId });
         }
       } catch (errAssoc) {
         console.error('Error asociando modificadores al producto', errAssoc);
@@ -216,28 +192,6 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
       toast.error(msg);
     } finally {
       setSavingProd(false);
-    }
-  };
-
-  const cargarModificadoresDeProducto = async (productoId) => {
-    if (!productoId) {
-      setSelectedModIds([]);
-      setInitialSelectedModIds([]);
-      return;
-    }
-    try {
-      const list = await productoModificadoresRepo.list(productoId, { sucursalId });
-      const ids =
-        list
-          ?.map((rel) => rel.modificador_id ?? rel.id)
-          .filter((value) => value != null)
-          .map((value) => String(value)) ?? [];
-      setSelectedModIds(ids);
-      setInitialSelectedModIds(ids);
-    } catch (err) {
-      console.error('Error cargando modificadores del producto', err);
-      setSelectedModIds([]);
-      setInitialSelectedModIds([]);
     }
   };
 
@@ -256,14 +210,42 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
     setPreviewUrl('');
     if (inputRef.current) inputRef.current.value = '';
 
-    // cargar modificadores asociados
-    cargarModificadoresDeProducto(p.producto_id);
-
     sectionRef.current?.scrollIntoView({
       behavior: 'smooth',
       block: 'start',
     });
   };
+
+  useEffect(() => {
+    if (!editProdId) {
+      setSelectedModIds([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingSelectedMods(true);
+      try {
+        const list = await productoModificadoresRepo.list(editProdId, { sucursalId });
+        if (cancelled) return;
+        const ids =
+          list
+            ?.map((rel) => rel.modificador_id ?? rel.id)
+            .filter((value) => value != null)
+            .map((value) => String(value)) ?? [];
+        setSelectedModIds(ids);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Error cargando modificadores del producto', err);
+          setSelectedModIds([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingSelectedMods(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editProdId, sucursalId]);
 
   const habilitarProducto = async (id) => {
     setBusyProdId(id);
@@ -464,25 +446,28 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
               No hay modificadores activos. Crea algunos en el panel de modificadores.
             </p>
           ) : (
-            <div className='border border-gray-300 rounded-lg p-2 max-h-44 overflow-y-auto bg-white'>
-              {modificadoresDisponibles.map((mod) => {
-                const id = String(mod.modificador_id ?? mod.id);
-                const checked = selectedModIds.includes(id);
-                return (
-                  <label
-                    key={id ?? mod.nombre}
-                    className='flex items-center justify-between text-sm py-1 cursor-pointer'>
-                    <div className='flex items-center gap-2'>
-                      <input type='checkbox' checked={checked} onChange={() => toggleModificadorSeleccionado(id)} />
-                      <span>{mod.nombre}</span>
-                    </div>
-                    <span className='text-xs text-gray-500'>
-                      {mod.valor_adicional ? `+$${mod.valor_adicional}` : ''}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
+            <>
+              {loadingSelectedMods && <p className='text-xs text-info mb-1'>Cargando modificadores asociados...</p>}
+              <div className='border border-gray-300 rounded-lg p-2 max-h-44 overflow-y-auto bg-white'>
+                {modificadoresDisponibles.map((mod) => {
+                  const id = String(mod.modificador_id ?? mod.id);
+                  const checked = selectedModIds.includes(id);
+                  return (
+                    <label
+                      key={id ?? mod.nombre}
+                      className='flex items-center justify-between text-sm py-1 cursor-pointer'>
+                      <div className='flex items-center gap-2'>
+                        <input type='checkbox' checked={checked} onChange={() => toggleModificadorSeleccionado(id)} />
+                        <span>{mod.nombre}</span>
+                      </div>
+                      <span className='text-xs text-gray-500'>
+                        {mod.valor_adicional ? `+$${mod.valor_adicional}` : ''}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </>
           )}
 
           <p className='text-[11px] text-gray-400 mt-1'>

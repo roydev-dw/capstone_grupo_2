@@ -198,5 +198,5 @@ export const apiFoodTrucks = {
    * ```
    * @remarks Garantiza el manejo de tokens incluso para eliminaciones idempotentes.
    */
-  delete: (endpoint) => request(endpoint, { method: 'DELETE' }),
+  delete: (endpoint, body) => request(endpoint, { method: 'DELETE', body }),
 };
