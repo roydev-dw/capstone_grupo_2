@@ -9,6 +9,11 @@ const productoImagenEndpoint = (id) => `v1/productos/${id}/imagen/`;
 
 const nowIso = () => new Date().toISOString();
 
+/**
+ * Desempaqueta una respuesta que puede ser:
+ * - Un Response de fetch (tiene .json())
+ * - Un objeto plano ya parseado (sin .json())
+ */
 async function unwrapResponse(resp) {
   if (resp && typeof resp === 'object' && typeof resp.json === 'function') {
     const clone = resp.clone?.() ?? resp;
@@ -21,11 +26,7 @@ function extractId(obj) {
   if (!obj || typeof obj !== 'object') return '';
   const direct = obj.producto_id ?? obj.id ?? obj.pk ?? obj.uuid;
   if (direct != null) return String(direct);
-  const nested =
-    obj.producto?.producto_id ??
-    obj.producto?.id ??
-    obj.producto?.pk ??
-    obj.producto?.uuid;
+  const nested = obj.producto?.producto_id ?? obj.producto?.id ?? obj.producto?.pk ?? obj.producto?.uuid;
   return nested != null ? String(nested) : '';
 }
 
@@ -36,16 +37,18 @@ function normalizeEstado(v) {
     v === '1' ||
     (typeof v === 'string' && v.toLowerCase() === 'true') ||
     v === 'Publicado'
-  )
+  ) {
     return true;
+  }
   if (
     v === false ||
     v === 0 ||
     v === '0' ||
     (typeof v === 'string' && v.toLowerCase() === 'false') ||
     v === 'Borrador'
-  )
+  ) {
     return false;
+  }
   return !!v;
 }
 
@@ -59,26 +62,33 @@ function normalizeMoneyString(val) {
   return n.toFixed(2);
 }
 
+/**
+ * Devuelve la lista de productos desde la respuesta JSON.
+ * Soporta varios formatos comunes:
+ * - { results: [...] }
+ * - { productos: [...] }
+ * - { items: [...] }
+ * - [ ... ]
+ */
 function pickList(res) {
-  if (Array.isArray(res?.results)) return res.results;
-  if (Array.isArray(res?.data?.results)) return res.data.results;
-  if (Array.isArray(res)) return res;
+  if (!res) return [];
+  const payload = res?.data ?? res;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.productos)) return payload.productos;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload)) return payload;
   return [];
 }
 
-function pickObject(res) {
-  return res?.data ?? res?.result ?? res ?? null;
-}
 const normalizeSucursalId = (value) => {
   if (value == null || value === '') return null;
   const num = Number(value);
   return Number.isNaN(num) ? null : num;
 };
+
 const filterBySucursal = (items, sucursalId) => {
   if (sucursalId == null) return items;
-  return items.filter(
-    (item) => Number(item.sucursal_id ?? item.sucursalId) === sucursalId
-  );
+  return items.filter((item) => Number(item.sucursal_id ?? item.sucursalId) === sucursalId);
 };
 
 function resolveUpdatedAt(p, fallback) {
@@ -97,15 +107,17 @@ function resolveUpdatedAt(p, fallback) {
 function mapProductFromApi(p, extra = {}) {
   const producto_id = extractId(p);
   const updatedAt = resolveUpdatedAt(p, extra.updatedAt);
-  const fechaCreacion =
-    p?.fecha_creacion ?? extra.fecha_creacion ?? nowIso();
+  const fechaCreacion = p?.fecha_creacion ?? extra.fecha_creacion ?? nowIso();
   const pending = extra.pending ?? false;
+  const categoriaId =
+    p?.categoria_id ?? p?.categoriaId ?? p?.categoria?.categoria_id ?? p?.categoria?.id ?? extra.categoria_id ?? '';
+  const categoriaNombre = p?.categoria_nombre ?? p?.categoria?.nombre ?? extra.categoria_nombre ?? '';
 
   return {
     id: producto_id,
     producto_id,
-    categoria_id: p?.categoria_id ?? '',
-    categoria_nombre: p?.categoria_nombre ?? '',
+    categoria_id: categoriaId,
+    categoria_nombre: categoriaNombre,
     nombre: p?.nombre ?? '',
     descripcion: p?.descripcion ?? '',
     precio_base: Number(p?.precio_base ?? 0),
@@ -147,20 +159,23 @@ function mapProductToApi(form) {
 
 function buildUpdateJson(form) {
   const body = {};
-  if (form?.categoria_id != null && String(form.categoria_id).trim() !== '')
+  if (form?.categoria_id != null && String(form.categoria_id).trim() !== '') {
     body.categoria_id = Number(form.categoria_id);
-  if (form?.nombre && String(form.nombre).trim() !== '')
+  }
+  if (form?.nombre && String(form.nombre).trim() !== '') {
     body.nombre = String(form.nombre).trim();
-  if (form?.descripcion && String(form.descripcion).trim() !== '')
+  }
+  if (form?.descripcion && String(form.descripcion).trim() !== '') {
     body.descripcion = String(form.descripcion).trim();
+  }
   const precio = normalizeMoneyString(form?.precio_base);
   if (precio) body.precio_base = precio;
-  if (
-    form?.tiempo_preparacion != null &&
-    String(form.tiempo_preparacion).trim() !== ''
-  )
+  if (form?.tiempo_preparacion != null && String(form.tiempo_preparacion).trim() !== '') {
     body.tiempo_preparacion = Number(form.tiempo_preparacion);
-  if ('estado' in (form || {})) body.estado = normalizeEstado(form?.estado);
+  }
+  if ('estado' in (form || {})) {
+    body.estado = normalizeEstado(form?.estado);
+  }
   const img = (form?.imagen_url ?? '').trim();
   if (img) body.imagen_url = img;
   const sucursal = normalizeSucursalId(form?.sucursal_id);
@@ -169,17 +184,14 @@ function buildUpdateJson(form) {
 }
 
 const sortByUpdatedDesc = (arr) =>
-  arr.sort((a, b) =>
-    String(b?.updatedAt ?? '').localeCompare(String(a?.updatedAt ?? ''))
-  );
+  arr.sort((a, b) => String(b?.updatedAt ?? '').localeCompare(String(a?.updatedAt ?? '')));
 
 function readFileAsDataUrl(file) {
   if (!file) return Promise.resolve(null);
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
-    reader.onerror = () =>
-      reject(reader.error || new Error('No se pudo leer el archivo'));
+    reader.onerror = () => reject(reader.error || new Error('No se pudo leer el archivo'));
     reader.readAsDataURL(file);
   });
 }
@@ -197,11 +209,7 @@ async function serializeFile(file) {
   };
 }
 
-function fileFromDataUrl(
-  dataUrl,
-  filename = 'image.webp',
-  type = 'image/webp'
-) {
+function fileFromDataUrl(dataUrl, filename = 'image.webp', type = 'image/webp') {
   const arr = dataUrl.split(',');
   const bstr = atob(arr[1]);
   let n = bstr.length;
@@ -210,10 +218,7 @@ function fileFromDataUrl(
   return new File([u8arr], filename, { type });
 }
 
-function toWebpFile(
-  file,
-  { maxWidth = 1600, maxHeight = 1600, quality = 82 } = {}
-) {
+function toWebpFile(file, { maxWidth = 1600, maxHeight = 1600, quality = 82 } = {}) {
   return new Promise((resolve, reject) => {
     try {
       Resizer.imageFileResizer(
@@ -252,9 +257,7 @@ async function uploadImagenProducto(productoId, file) {
   }
 
   const fd = new FormData();
-  const filename =
-    toUpload.name ||
-    (file.name ? file.name.replace(/\.[^.]+$/, '.webp') : 'upload.webp');
+  const filename = toUpload.name || (file.name ? file.name.replace(/\.[^.]+$/, '.webp') : 'upload.webp');
   fd.append('imagen', toUpload, filename);
 
   const resp = await apiFoodTrucks.post(productoImagenEndpoint(productoId), fd);
@@ -309,11 +312,7 @@ async function queueProductCreate(localProduct, form) {
 }
 
 async function queueProductUpdate(id, changes, { method = 'PUT', body } = {}) {
-  const payloadBody =
-    body ??
-    (method === 'PATCH'
-      ? { ...changes }
-      : buildUpdateJson(changes));
+  const payloadBody = body ?? (method === 'PATCH' ? { ...changes } : buildUpdateJson(changes));
 
   if (payloadBody && typeof payloadBody === 'object') {
     delete payloadBody.imagen_file;
@@ -324,8 +323,7 @@ async function queueProductUpdate(id, changes, { method = 'PUT', body } = {}) {
     body: payloadBody,
   };
 
-  if (changes?.categoria_nombre)
-    payload.categoria_nombre = changes.categoria_nombre;
+  if (changes?.categoria_nombre) payload.categoria_nombre = changes.categoria_nombre;
   if (changes?.imagen_url) payload.imageUrl = changes.imagen_url;
 
   const image = await serializeFile(changes?.imagen_file ?? null);
@@ -372,11 +370,7 @@ async function processProductCreate(entry) {
   );
 
   if (payload.image) {
-    const file = fileFromDataUrl(
-      payload.image.dataUrl,
-      payload.image.name,
-      payload.image.type
-    );
+    const file = fileFromDataUrl(payload.image.dataUrl, payload.image.name, payload.image.type);
     const uploaded = await uploadImagenProducto(newId, file);
     if (uploaded) {
       product = { ...product, imagen_url: uploaded };
@@ -429,11 +423,7 @@ async function processProductUpdate(entry) {
   });
 
   if (payload.image) {
-    const file = fileFromDataUrl(
-      payload.image.dataUrl,
-      payload.image.name,
-      payload.image.type
-    );
+    const file = fileFromDataUrl(payload.image.dataUrl, payload.image.name, payload.image.type);
     const uploaded = await uploadImagenProducto(id, file);
     if (uploaded) {
       product = { ...product, imagen_url: uploaded };
@@ -454,25 +444,11 @@ async function processProductDelete(entry) {
   if (!id) return;
 
   const hard = !!payload.hard;
-  const url = hard
-    ? `${ENDPOINT_BASE}${id}/?hard=1`
-    : `${ENDPOINT_BASE}${id}/`;
+  const url = hard ? `${ENDPOINT_BASE}${id}/?hard=1` : `${ENDPOINT_BASE}${id}/`;
   await apiFoodTrucks.delete(url);
   await db.products.delete(id);
 }
 
-/**
- * Ejecuta la operacion asociada a una entrada de outbox de productos.
- *
- * @param {{op: string, payload?: Record<string, any>, tempId?: string, targetId?: string}} entry Entrada pendiente.
- * @returns {Promise<void>} Resuelve al completar la operacion o propaga el error HTTP.
- * @throws {Error} Si la API de Punto Sabor rechaza la operacion.
- * @example
- * ```js
- * await processProductOutboxEntry({ op: 'delete', targetId: productoId });
- * ```
- * @remarks Se usa desde `syncManager` para reintentar creaciones, actualizaciones o eliminaciones offline.
- */
 export async function processProductOutboxEntry(entry) {
   if (!entry) return;
   if (entry.op === 'create') return processProductCreate(entry);
@@ -481,17 +457,6 @@ export async function processProductOutboxEntry(entry) {
   throw new Error(`Operacion de outbox productos desconocida: ${entry.op}`);
 }
 
-/**
- * Recorre la outbox de productos y procesa cada entrada pendiente.
- *
- * @returns {Promise<void>} Resuelve cuando todas las entradas se sincronizan.
- * @throws {Error} Si alguna entrada falla y se debe avisar a la UI.
- * @example
- * ```js
- * await processProductQueue();
- * ```
- * @remarks Marca cada registro con `status` correspondiente (`sending`, `synced`, `error`).
- */
 export async function processProductQueue() {
   const entries = await db.outbox
     .where('type')
@@ -520,28 +485,17 @@ export async function processProductQueue() {
   }
 }
 
-/**
- * Repositorio de productos que combina cache Dexie y API Punto Sabor.
- *
- * @remarks Centraliza las operaciones `list`, `create`, `update`, `delete` con soporte offline-first.
- */
 export const productosRepo = {
   async list(options = {}) {
     const sucursalNumber = normalizeSucursalId(options.sucursalId);
 
     let allowedCategoryIds = null;
-    if (
-      Array.isArray(options.allowedCategoryIds) &&
-      options.allowedCategoryIds.length
-    ) {
+
+    if (Array.isArray(options.allowedCategoryIds) && options.allowedCategoryIds.length) {
       allowedCategoryIds = new Set(
         options.allowedCategoryIds
           .map((value) => {
-            if (
-              value &&
-              typeof value === 'object' &&
-              (value.categoria_id != null || value.id != null)
-            ) {
+            if (value && typeof value === 'object' && (value.categoria_id != null || value.id != null)) {
               return String(value.categoria_id ?? value.id ?? '');
             }
             return String(value ?? '');
@@ -550,33 +504,36 @@ export const productosRepo = {
           .filter((value) => value !== '')
       );
     } else if (sucursalNumber != null) {
-      const { items: categoriasPermitidas = [] } = await categoriasRepo.listAll(
-        { sucursalId: sucursalNumber }
-      );
-      allowedCategoryIds = new Set(
-        categoriasPermitidas
-          .map((cat) => String(cat.categoria_id ?? cat.id ?? '').trim())
-          .filter((value) => value !== '')
-      );
+      const { items: categoriasPermitidas = [] } = await categoriasRepo.listAll({
+        sucursalId: sucursalNumber,
+      });
+      // SOLO filtramos por categoría si realmente hay categorías permitidas
+      if (categoriasPermitidas.length) {
+        allowedCategoryIds = new Set(
+          categoriasPermitidas
+            .map((cat) => String(cat.categoria_id ?? cat.id ?? '').trim())
+            .filter((value) => value !== '')
+        );
+      } else {
+        allowedCategoryIds = null; // no filtres nada si no hay categorías
+      }
     }
+
     const query = sucursalNumber != null ? `?sucursal_id=${sucursalNumber}` : '';
+
     try {
       const res = await apiFoodTrucks.get(`${ENDPOINT_BASE}${query}`);
       const data = await unwrapResponse(res);
+
       const fetchedItems = pickList(data).map((x) =>
         mapProductFromApi(x.producto ?? x, {
           pending: false,
           pendingOp: null,
-          sucursal_id:
-            sucursalNumber != null
-              ? sucursalNumber
-              : x?.sucursal_id ?? x?.producto?.sucursal_id,
+          sucursal_id: sucursalNumber != null ? sucursalNumber : x?.sucursal_id ?? x?.producto?.sucursal_id,
         })
       );
-      const filteredFromBackend = filterBySucursal(
-        fetchedItems,
-        sucursalNumber
-      ).filter((item) => {
+
+      const filteredFromBackend = filterBySucursal(fetchedItems, sucursalNumber).filter((item) => {
         if (!allowedCategoryIds) return true;
         const catId = String(item.categoria_id ?? '').trim();
         if (!catId) return false;
@@ -584,17 +541,10 @@ export const productosRepo = {
       });
 
       await db.transaction('rw', db.products, async () => {
-        const pendingLocals = await db.products
-          .where('pendingFlag')
-          .equals(1)
-          .toArray();
+        const pendingLocals = await db.products.where('pendingFlag').equals(1).toArray();
         const pendingMap = new Map(
           pendingLocals
-            .filter((item) =>
-              sucursalNumber == null
-                ? true
-                : Number(item.sucursal_id) === sucursalNumber
-            )
+            .filter((item) => (sucursalNumber == null ? true : Number(item.sucursal_id) === sucursalNumber))
             .map((item) => [item.id, item])
         );
         const serverIds = new Set(filteredFromBackend.map((item) => item.id));
@@ -613,24 +563,16 @@ export const productosRepo = {
         if (toPersist.length) await db.products.bulkPut(toPersist);
 
         const scopedCollection =
-          sucursalNumber != null
-            ? db.products.where('sucursal_id').equals(sucursalNumber)
-            : db.products;
+          sucursalNumber != null ? db.products.where('sucursal_id').equals(sucursalNumber) : db.products;
         const staleKeys = await scopedCollection
-          .filter(
-            (p) =>
-              !p.pending && !p.tempId && !!p.id && !serverIds.has(p.id)
-          )
+          .filter((p) => !p.pending && !p.tempId && !!p.id && !serverIds.has(p.id))
           .primaryKeys();
         if (staleKeys.length) await db.products.bulkDelete(staleKeys);
       });
 
       let ordered;
       if (sucursalNumber != null) {
-        let scoped = await db.products
-          .where('sucursal_id')
-          .equals(sucursalNumber)
-          .toArray();
+        let scoped = await db.products.where('sucursal_id').equals(sucursalNumber).toArray();
         if (allowedCategoryIds) {
           scoped = scoped.filter((item) => {
             const catId = String(item.categoria_id ?? '').trim();
@@ -642,14 +584,13 @@ export const productosRepo = {
       } else {
         ordered = await db.products.orderBy('updatedAt').reverse().toArray();
       }
+
       return { items: ordered, source: 'network' };
     } catch (err) {
+      console.error('Error fetching products from network, falling back to cache', err);
       let cached;
       if (sucursalNumber != null) {
-        let scoped = await db.products
-          .where('sucursal_id')
-          .equals(sucursalNumber)
-          .toArray();
+        let scoped = await db.products.where('sucursal_id').equals(sucursalNumber).toArray();
         if (allowedCategoryIds) {
           scoped = scoped.filter((item) => {
             const catId = String(item.categoria_id ?? '').trim();
@@ -659,10 +600,7 @@ export const productosRepo = {
         }
         cached = sortByUpdatedDesc(scoped);
       } else {
-        cached = await db.products
-          .orderBy('updatedAt')
-          .reverse()
-          .toArray();
+        cached = await db.products.orderBy('updatedAt').reverse().toArray();
       }
       return { items: cached, source: 'cache' };
     }
@@ -702,7 +640,10 @@ export const productosRepo = {
       const { image } = await queueProductCreate(provisional, form);
       if (image?.dataUrl) {
         provisional.imagen_url = image.dataUrl;
-        await db.products.update(tempId, { imagen_url: image.dataUrl, pendingFlag: 1 });
+        await db.products.update(tempId, {
+          imagen_url: image.dataUrl,
+          pendingFlag: 1,
+        });
       }
       return provisional;
     }
@@ -768,16 +709,9 @@ export const productosRepo = {
     const now = nowIso();
     const prev = await db.products.get(id);
 
-    const desiredEstado = normalizeEstado(
-      form?.estado !== undefined ? form.estado : prev?.estado
-    );
+    const desiredEstado = normalizeEstado(form?.estado !== undefined ? form.estado : prev?.estado);
 
-    const base =
-      prev ??
-      mapProductFromApi(
-        { producto_id: id },
-        { sucursal_id: form?.sucursal_id }
-      );
+    const base = prev ?? mapProductFromApi({ producto_id: id }, { sucursal_id: form?.sucursal_id });
     const localNext = {
       ...base,
       id,
@@ -787,9 +721,7 @@ export const productosRepo = {
       nombre: form?.nombre ?? base.nombre ?? '',
       descripcion: form?.descripcion ?? base.descripcion ?? '',
       precio_base: Number(form?.precio_base ?? base.precio_base ?? 0),
-      tiempo_preparacion: Number(
-        form?.tiempo_preparacion ?? base.tiempo_preparacion ?? 0
-      ),
+      tiempo_preparacion: Number(form?.tiempo_preparacion ?? base.tiempo_preparacion ?? 0),
       estado: desiredEstado,
       imagen_url: form?.imagen_url ?? base.imagen_url ?? '',
       updatedAt: now,
@@ -797,10 +729,7 @@ export const productosRepo = {
       pendingFlag: 1,
       pendingOp: 'update',
       lastError: null,
-      sucursal_id:
-        form?.sucursal_id != null
-          ? Number(form.sucursal_id)
-          : base?.sucursal_id,
+      sucursal_id: form?.sucursal_id != null ? Number(form.sucursal_id) : base?.sucursal_id,
     };
 
     await db.products.put(localNext);
@@ -808,7 +737,10 @@ export const productosRepo = {
     if (!isOnline()) {
       const { image } = await queueProductUpdate(id, form);
       if (image?.dataUrl) {
-        await db.products.update(id, { imagen_url: image.dataUrl, pendingFlag: 1 });
+        await db.products.update(id, {
+          imagen_url: image.dataUrl,
+          pendingFlag: 1,
+        });
         localNext.imagen_url = image.dataUrl;
       }
       return localNext;
@@ -820,23 +752,24 @@ export const productosRepo = {
         const uploadedUrl = await uploadImagenProducto(id, form.imagen_file);
         if (uploadedUrl) {
           localNext.imagen_url = uploadedUrl;
-          await db.products.update(id, { imagen_url: uploadedUrl, pendingFlag: 1 });
+          await db.products.update(id, {
+            imagen_url: uploadedUrl,
+            pendingFlag: 1,
+          });
         }
       }
 
       const body = buildUpdateJson(form);
       let product = localNext;
       if (Object.keys(body).length) {
-        const updatedRes = await apiFoodTrucks.put(
-          `${ENDPOINT_BASE}${id}/`,
-          body
-        );
+        const updatedRes = await apiFoodTrucks.put(`${ENDPOINT_BASE}${id}/`, body);
         const data = await unwrapResponse(updatedRes);
         const obj = data?.producto ?? data;
-        product = mapProductFromApi(
-          obj || { ...body, producto_id: id },
-          { pending: false, pendingOp: null, tempId: null }
-        );
+        product = mapProductFromApi(obj || { ...body, producto_id: id }, {
+          pending: false,
+          pendingOp: null,
+          tempId: null,
+        });
       } else {
         product = {
           ...localNext,
@@ -891,10 +824,7 @@ export const productosRepo = {
       });
     } else {
       await db.products.put(
-        mapProductFromApi(
-          { producto_id: id, estado: val },
-          { updatedAt: now, pending: true, pendingOp: 'update' }
-        )
+        mapProductFromApi({ producto_id: id, estado: val }, { updatedAt: now, pending: true, pendingOp: 'update' })
       );
     }
 
@@ -981,6 +911,8 @@ export const productosRepo = {
     }
     try {
       await this.list();
-    } catch {}
+    } catch (err) {
+      console.log('Error', err);
+    }
   },
 };

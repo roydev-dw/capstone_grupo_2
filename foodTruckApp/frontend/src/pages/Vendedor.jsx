@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../utils/db';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -11,17 +11,34 @@ import { PedidoActual } from '../components/vendedor/PedidoActual';
 import { BotonTarjeta } from '../components/vendedor/BotonTarjeta';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { categoriasRepo } from '../utils/repoCategorias';
+import { productoModificadoresRepo } from '../utils/repoProductoModificador';
 import { EMPRESA_PUNTO_SABOR_ID, perteneceAEmpresa } from '../utils/empresas';
 
-// --- helper para normalizar respuestas {results:[]}, {data:{results:[]}}, [] ---
-const pickList = (res) =>
-  Array.isArray(res?.results)
-    ? res.results
-    : Array.isArray(res?.data?.results)
-    ? res.data.results
-    : Array.isArray(res)
-    ? res
-    : [];
+// --- helpers de normalización de respuestas ---
+
+// Desempaqueta una respuesta que puede ser:
+// - Response de fetch (tiene .json())
+// - Objeto ya parseado (sin .json())
+const unwrapResponse = async (resp) => {
+  if (resp && typeof resp === 'object' && typeof resp.json === 'function') {
+    const clone = resp.clone?.() ?? resp;
+    return clone.json();
+  }
+  return resp;
+};
+
+// Normaliza {results:[]}, {productos:[]}, {items:[]}, []...
+const pickList = (res) => {
+  if (!res) return [];
+  const payload = res?.data ?? res;
+
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.productos)) return payload.productos;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload)) return payload;
+
+  return [];
+};
 
 // Resolver imagen absoluta si backend devuelve ruta relativa
 const resolveImg = (u) => {
@@ -32,6 +49,100 @@ const resolveImg = (u) => {
   return base ? `${base}/${path}` : `/${path}`;
 };
 
+const DEFAULT_OPTION_GROUP = 'Agregados';
+
+const buildOptionsFromModificadores = (items = []) => {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  const groups = new Map();
+  items.forEach((rel) => {
+    const source = rel?.modificador ?? rel ?? {};
+    const rawGroup = source?.tipo ?? rel?.tipo ?? '';
+    const groupName = String(rawGroup || DEFAULT_OPTION_GROUP).trim() || DEFAULT_OPTION_GROUP;
+    const choiceId =
+      String(source?.modificador_id ?? source?.id ?? rel?.modificador_id ?? rel?.id ?? source?.nombre ?? '').trim() ||
+      source?.nombre ||
+      '';
+    const choiceName = source?.nombre ?? rel?.nombre ?? `Opción ${choiceId || ''}`.trim();
+    const extraPriceRaw = source?.valor_adicional ?? rel?.valor_adicional ?? 0;
+    const extraPrice = Number.isFinite(Number(extraPriceRaw)) ? Number(extraPriceRaw) : 0;
+
+    if (!choiceName) return;
+    if (!groups.has(groupName)) groups.set(groupName, []);
+    groups.get(groupName).push({
+      id: choiceId || `${groupName}-${choiceName}`,
+      name: choiceName,
+      extraPrice,
+    });
+  });
+
+  const options = [];
+  for (const [groupName, choices] of groups.entries()) {
+    if (!choices.length) continue;
+    const normalizedGroup = groupName || DEFAULT_OPTION_GROUP;
+    const sorted = choices.sort((a, b) => a.name.localeCompare(b.name));
+    const defaultChoice = {
+      id: `none-${normalizedGroup}`.toLowerCase(),
+      name: `Sin ${normalizedGroup.toLowerCase()}`,
+      extraPrice: 0,
+    };
+    const hasZeroChoice = sorted.some(
+      (choice) => choice.extraPrice === 0 && choice.name.toLowerCase().startsWith('sin')
+    );
+    const finalChoices = hasZeroChoice ? sorted : [defaultChoice, ...sorted];
+    options.push({
+      name: normalizedGroup,
+      choices: finalChoices,
+    });
+  }
+
+  return options;
+};
+
+const normalizeSucursalId = (valor) => {
+  if (valor == null || valor === '') return null;
+  const num = Number(valor);
+  return Number.isFinite(num) ? num : null;
+};
+
+const deriveSucursalIdFromUser = (usuario) => {
+  if (!usuario) return null;
+  const candidatos = [
+    usuario.sucursal_id,
+    usuario.sucursalId,
+    ...(Array.isArray(usuario.sucursales_ids) ? usuario.sucursales_ids : []),
+    ...(Array.isArray(usuario.sucursales) ? usuario.sucursales : []),
+  ];
+  for (const candidato of candidatos) {
+    const id = normalizeSucursalId(candidato?.id ?? candidato?.sucursal_id ?? candidato);
+    if (id != null) return id;
+  }
+  try {
+    const persisted = localStorage.getItem('vendorSucursalId');
+    const parsed = normalizeSucursalId(persisted);
+    if (parsed != null) return parsed;
+  } catch {}
+  return null;
+};
+
+const normalizeCategoriaId = (valor) => {
+  if (valor === null || valor === undefined) return '';
+  return String(valor).trim();
+};
+
+const getProductoCategoriaId = (producto) => {
+  if (!producto || typeof producto !== 'object') return '';
+  const categoria = producto.categoria ?? producto.category ?? {};
+  const rawId =
+    producto.categoria_id ??
+    producto.categoriaId ??
+    categoria.categoria_id ??
+    categoria.id ??
+    categoria.categoriaId ??
+    null;
+  return rawId == null ? '' : normalizeCategoriaId(rawId);
+};
+
 export const Vendedor = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -39,6 +150,7 @@ export const Vendedor = () => {
   const [isMobileAbrirCarrito, setIsMobileAbrirCarrito] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
   const [fetchError, setFetchError] = useState('');
+  const optionsCacheRef = useRef(new Map());
 
   const { user } = useCurrentUser();
   const sessionUser = useMemo(() => {
@@ -50,7 +162,16 @@ export const Vendedor = () => {
       return null;
     }
   }, [user]);
-  const sucursalId = sessionUser?.sucursal_id ?? sessionUser?.sucursalId ?? null;
+
+  const sucursalId = useMemo(() => {
+    const derived = deriveSucursalIdFromUser(sessionUser);
+    if (derived != null) {
+      try {
+        localStorage.setItem('vendorSucursalId', String(derived));
+      } catch {}
+    }
+    return derived;
+  }, [sessionUser]);
 
   useEffect(() => {
     if (!sessionUser) return;
@@ -60,11 +181,26 @@ export const Vendedor = () => {
   }, [sessionUser, navigate]);
 
   const carrito = useLiveQuery(() => db.carrito.toArray(), []) || [];
+
   const productosDB =
     useLiveQuery(() => {
       if (sucursalId == null) return [];
       return db.products.where('sucursal_id').equals(Number(sucursalId)).toArray();
     }, [sucursalId]) || [];
+
+  useEffect(() => {
+    optionsCacheRef.current.clear();
+  }, [sucursalId]);
+
+  useEffect(() => {
+    const cache = optionsCacheRef.current;
+    (productosDB || []).forEach((producto) => {
+      const key = String(producto.producto_id ?? producto.id ?? '').trim();
+      const opts = Array.isArray(producto.options) ? producto.options : [];
+      if (!key || !opts.length || cache.has(key)) return;
+      cache.set(key, opts);
+    });
+  }, [productosDB]);
 
   const productosUI = useMemo(() => {
     return (productosDB || [])
@@ -75,6 +211,7 @@ export const Vendedor = () => {
         price: Number(p.precio_base || 0),
         image: resolveImg(p.imagen_url || ''),
         category: p.categoria_nombre?.trim() || 'Sin categoria',
+        options: Array.isArray(p.options) ? p.options : [],
       }));
   }, [productosDB]);
 
@@ -121,6 +258,63 @@ export const Vendedor = () => {
     return (producto.price || 0) + extras;
   }, []);
 
+  const ensureOptionsForProduct = useCallback(
+    async (producto) => {
+      if (!producto) return producto;
+
+      const productoId = producto.producto_id ?? producto.id;
+      const cacheKey = String(productoId ?? '').trim();
+      if (!cacheKey) {
+        return { ...producto, options: Array.isArray(producto.options) ? producto.options : [] };
+      }
+
+      // Si ya tiene options precargadas, las usamos y guardamos en cache para próximos clicks
+      if (Array.isArray(producto.options) && producto.options.length > 0) {
+        optionsCacheRef.current.set(cacheKey, producto.options);
+        return { ...producto, options: producto.options };
+      }
+
+      if (optionsCacheRef.current.has(cacheKey)) {
+        return { ...producto, options: optionsCacheRef.current.get(cacheKey) || [] };
+      }
+
+      try {
+        const relaciones = await productoModificadoresRepo.list(productoId, {
+          sucursalId,
+        });
+
+        const opciones = buildOptionsFromModificadores(relaciones);
+        optionsCacheRef.current.set(cacheKey, opciones);
+
+        if (opciones.length) {
+          try {
+            await db.products.update(cacheKey, { options: opciones });
+          } catch (persistErr) {
+            console.warn('[Vendedor] No se pudieron guardar los modificadores en cache local', persistErr);
+          }
+        }
+
+        console.log('[Vendedor] Modificadores obtenidos desde endpoint de producto', {
+          productoId: cacheKey,
+          sucursalId,
+          cantidad: opciones.length,
+          opciones,
+        });
+
+        return { ...producto, options: opciones };
+      } catch (err) {
+        console.error('[Vendedor] No se pudieron cargar modificadores para el producto', {
+          productoId: cacheKey,
+          sucursalId,
+          err,
+        });
+        optionsCacheRef.current.set(cacheKey, []);
+        return { ...producto, options: [] };
+      }
+    },
+    [sucursalId]
+  );
+
   useEffect(() => {
     const syncProductos = async () => {
       try {
@@ -143,7 +337,9 @@ export const Vendedor = () => {
           sucursalId,
         });
         const allowedCategoryIds = new Set(
-          (categoriasPermitidas || []).map((cat) => String(cat.categoria_id ?? cat.id ?? ''))
+          (categoriasPermitidas || [])
+            .map((cat) => normalizeCategoriaId(cat.categoria_id ?? cat.id ?? ''))
+            .filter((id) => !!id)
         );
 
         const countPrev = await db.products.where('sucursal_id').equals(Number(sucursalId)).count();
@@ -151,36 +347,59 @@ export const Vendedor = () => {
 
         const endpoint = `v1/productos/?sucursal_id=${sucursalId}`;
         const res = await apiFoodTrucks.get(endpoint);
-        const list = pickList(res);
+        const data = await unwrapResponse(res);
+        const list = pickList(data);
+
         const filtradosPorCategoria =
           allowedCategoryIds.size === 0
             ? list
-            : list.filter((item) => allowedCategoryIds.has(String(item?.categoria_id ?? item?.categoriaId ?? '')));
+            : list.filter((item) => {
+                const categoriaId = getProductoCategoriaId(item);
+                return categoriaId && allowedCategoryIds.has(categoriaId);
+              });
+
         console.log('[Vendedor] Productos recibidos', {
           sucursalId,
           total: filtradosPorCategoria.length,
           ids: filtradosPorCategoria.map((item) => item.producto_id ?? item.id),
         });
 
-        const normalizados = filtradosPorCategoria.map((r) => {
-          const productoId = String(r.producto_id ?? r.id ?? '');
-          const categoriaId = String(r.categoria_id ?? 'sin-categoria');
+        const normalizados = filtradosPorCategoria.map((raw) => {
+          const productoId = String(raw.producto_id ?? raw.id ?? '');
+          const categoria = raw.categoria ?? {};
+          const categoriaId = String(
+            raw.categoria_id ?? raw.categoriaId ?? categoria.categoria_id ?? categoria.id ?? 'sin-categoria'
+          );
           const updatedAt =
-            r.updated_at ?? r.updatedAt ?? r.fecha_actualizacion ?? r.fecha_creacion ?? new Date().toISOString();
+            raw.updated_at ??
+            raw.updatedAt ??
+            raw.fecha_actualizacion ??
+            raw.fecha_creacion ??
+            new Date().toISOString();
           const syncedAt = new Date().toISOString();
-          const sucursalAsignada = r.sucursal_id != null ? Number(r.sucursal_id) : Number(sucursalId);
+          const sucursalAsignada = raw.sucursal_id != null ? Number(raw.sucursal_id) : Number(sucursalId);
+          const opcionesInline = Array.isArray(raw.modificadores)
+            ? buildOptionsFromModificadores(raw.modificadores)
+            : [];
+          if (opcionesInline.length) {
+            console.log('[Vendedor] Modificadores precargados para producto', {
+              productoId,
+              cantidad: opcionesInline.length,
+              opciones: opcionesInline,
+            });
+          }
           return {
             id: productoId,
             producto_id: productoId,
             categoria_id: categoriaId,
-            categoria_nombre: r.categoria_nombre ?? 'Sin categoria',
-            nombre: r.nombre ?? '',
-            descripcion: r.descripcion ?? '',
-            precio_base: Number(r.precio_base ?? 0),
-            tiempo_preparacion: Number(r.tiempo_preparacion ?? 0),
-            estado: r.estado !== false,
-            fecha_creacion: r.fecha_creacion || updatedAt,
-            imagen_url: r.imagen_url ?? r.imagen ?? '',
+            categoria_nombre: raw.categoria_nombre ?? categoria.nombre ?? categoria.categoria_nombre ?? 'Sin categoria',
+            nombre: raw.nombre ?? '',
+            descripcion: raw.descripcion ?? '',
+            precio_base: Number(raw.precio_base ?? 0),
+            tiempo_preparacion: Number(raw.tiempo_preparacion ?? 0),
+            estado: raw.estado !== false,
+            fecha_creacion: raw.fecha_creacion || updatedAt,
+            imagen_url: raw.imagen_url ?? raw.imagen ?? '',
             updatedAt,
             pending: false,
             tempId: null,
@@ -188,6 +407,7 @@ export const Vendedor = () => {
             lastError: null,
             pendingOp: null,
             sucursal_id: sucursalAsignada,
+            options: opcionesInline,
           };
         });
 
@@ -205,22 +425,6 @@ export const Vendedor = () => {
 
     syncProductos();
   }, [sucursalId]);
-
-  const handleProductClick = useCallback((producto) => {
-    if (producto.options && producto.options.length > 0) {
-      setProductoSeleccionado(producto);
-    } else {
-      handleAddCarrito({ ...producto, quantity: 1 });
-    }
-  }, []);
-
-  const handleEditarItem = useCallback(
-    (idItemCarrito) => {
-      const item = carrito.find((i) => i.idItemCarrito === idItemCarrito);
-      if (item) setItemParaEditar(item);
-    },
-    [carrito]
-  );
 
   const handleAddCarrito = useCallback(
     async (productoAgregado) => {
@@ -251,6 +455,45 @@ export const Vendedor = () => {
       setProductoSeleccionado(null);
     },
     [calcularPrecioFinalUnitario, generarIdItemCarrito]
+  );
+
+  const handleProductClick = useCallback(
+    (producto) => {
+      (async () => {
+        const withOptions = await ensureOptionsForProduct(producto);
+        if (withOptions.options && withOptions.options.length > 0) {
+          setProductoSeleccionado(withOptions);
+        } else {
+          handleAddCarrito({ ...withOptions, quantity: 1 });
+        }
+      })();
+    },
+    [ensureOptionsForProduct, handleAddCarrito]
+  );
+
+  const handleEditarItem = useCallback(
+    (idItemCarrito) => {
+      (async () => {
+        const item = carrito.find((i) => i.idItemCarrito === idItemCarrito);
+        if (!item) return;
+        const baseProducto = productosUI.find((p) => String(p.id) === String(item.id)) ??
+          productosDB.find((p) => String(p.producto_id ?? p.id) === String(item.id)) ?? {
+            id: item.id,
+            producto_id: item.id,
+            name: item.name,
+            price: item.price,
+            image: item.image ?? '',
+            category: item.category ?? '',
+            options: item.options ?? [],
+          };
+        const withOptions = await ensureOptionsForProduct(baseProducto);
+        setItemParaEditar({
+          ...withOptions,
+          ...item,
+        });
+      })();
+    },
+    [carrito, productosUI, productosDB, ensureOptionsForProduct]
   );
 
   const handleActualizarItemEnCarrito = useCallback(
@@ -352,10 +595,6 @@ export const Vendedor = () => {
             {productosFiltrados.length === 0 ? (
               <div className='mt-8 p-6 bg-white rounded-xl border text-gray-600'>
                 <p className='font-semibold'>No hay productos para mostrar.</p>
-                <p className='text-sm mt-1'>
-                  Verifica que tu endpoint <code>/v1/productos/</code> esté devolviendo productos con
-                  <code className='mx-1'>estado: true</code> (se muestran como <em>Publicado</em>).
-                </p>
               </div>
             ) : (
               <div className='grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 grid-cols-extra gap-8 mt-8'>
@@ -418,7 +657,3 @@ export const Vendedor = () => {
     </div>
   );
 };
-
-
-
-
