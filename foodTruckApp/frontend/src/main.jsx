@@ -14,6 +14,7 @@ import AccesoProhibido from './pages/AccesoProhibido';
 import { initSyncManager, resetSyncManager } from './utils/syncManager';
 import { getAccessToken } from './utils/session';
 import { EMPRESA_PUNTO_SABOR_ID } from './utils/empresas';
+import { WebpayResultado } from './pages/webpayResultado';
 
 import '@fontsource/luckiest-guy';
 import '@fontsource/poppins/400.css';
@@ -74,6 +75,9 @@ const AppRouter = () => {
         />
         {/* RUTA 403 PUBLICA (sin guard) */}
         <Route path='/403' element={<AccesoProhibido />} />
+
+        {/* Resultado Webpay (pública, sin guard) */}
+        <Route path='/resultado' element={<WebpayResultado />} />
 
         {/* Protegidas por rol */}
         <Route

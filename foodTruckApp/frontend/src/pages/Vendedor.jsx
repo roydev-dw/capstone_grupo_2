@@ -471,6 +471,13 @@ export const Vendedor = () => {
     [ensureOptionsForProduct, handleAddCarrito]
   );
 
+  const handlePedidoConfirmado = useCallback((pedidoCreado) => {
+    console.log('%c[VENDEDOR] Pedido confirmado desde PedidoActual →', 'color:#0f0;font-weight:bold', pedidoCreado);
+    // más adelante acá puedes:
+    // - refrescar panel de pedidos
+    // - navegar a otra vista
+  }, []);
+
   const handleEditarItem = useCallback(
     (idItemCarrito) => {
       (async () => {
@@ -629,6 +636,9 @@ export const Vendedor = () => {
             onAgregarAlCarrito={handleAddCarrito}
             onRemoverDelCarrito={handleRemoveCarrito}
             onEliminarItem={handleEliminarItem}
+            sucursalId={sucursalId}
+            usuarioId={sessionUser?.id ?? sessionUser?.usuario_id ?? sessionUser?.user_id}
+            onPedidoConfirmado={handlePedidoConfirmado}
           />
         </div>
       </div>
@@ -650,6 +660,9 @@ export const Vendedor = () => {
               onEditarItem={handleEditarItem}
               onClose={() => setIsMobileAbrirCarrito(false)}
               onEliminarItem={handleEliminarItem}
+              sucursalId={sucursalId}
+              usuarioId={sessionUser?.id ?? sessionUser?.usuario_id ?? sessionUser?.user_id}
+              onPedidoConfirmado={handlePedidoConfirmado}
             />
           </div>
         </div>
