@@ -56,7 +56,6 @@ const AppRouter = () => {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Publica para invitados */}
         <Route
           path='/'
           element={
@@ -73,13 +72,11 @@ const AppRouter = () => {
             </RutaPublica>
           }
         />
-        {/* RUTA 403 PUBLICA (sin guard) */}
+
         <Route path='/403' element={<AccesoProhibido />} />
 
-        {/* Resultado Webpay (pública, sin guard) */}
         <Route path='/resultado' element={<WebpayResultado />} />
 
-        {/* Protegidas por rol */}
         <Route
           path='/vendedor'
           element={
@@ -118,15 +115,10 @@ const AppRouter = () => {
             </RutaProtegida>
           }
         />
-        {/* Catch-all al final */}
         <Route path='*' element={<Navigate to='/403' replace />} />
       </Routes>
     </BrowserRouter>
   );
 };
 
-createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <AppRouter />
-  </React.StrictMode>
-);
+createRoot(document.getElementById('root')).render(<AppRouter />);
