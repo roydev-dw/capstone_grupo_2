@@ -1,24 +1,14 @@
-"""
-URL configuration for settings project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/4.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
 from django.contrib import admin
 from django.urls import path
 from core import views
 from django.views.generic import RedirectView
-from core.views import producto_detail, productos_list , sucursales_list, sucursal_detail, empresas_list, empresa_detail, categorias_list, categoria_detail, roles_list, rol_detail, usuarios_list, usuario_detail, producto_imagen, modificadores_list, modificador_detail, producto_modificadores
+from core.views import producto_detail, productos_list , sucursales_list, sucursal_detail, empresas_list, empresa_detail, categorias_list, categoria_detail, roles_list, rol_detail, usuarios_list, usuario_detail, producto_imagen, modificadores_list, modificador_detail, producto_modificadores, regla_detail, reglas_list, metodos_pago_list, metodo_pago_detail, pedido_detail, pedidos_list, pedido_detalle_detail, pedido_detalles_list, detalle_modificador_detail, detalle_modificadores_list, pago_detail, pagos_list, boleta_detail, boletas_list, usuario_sucursal_detail, usuarios_sucursales_list, webpay_init, webpay_transaccion_detail, webpay_transacciones_list, webpay_commit, auditoria_detail, auditorias_list, cierre_caja_detail, cierres_caja_list
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+    SpectacularRedocView,
+)
+
 
 urlpatterns = [
     path('api/v1/auth/login/', views.login_api, name='api_login'),
@@ -41,4 +31,38 @@ urlpatterns = [
     path('api/v1/modificadores/', views.modificadores_list, name='modificadores_list'),
     path('api/v1/modificadores/<int:modificador_id>/', views.modificador_detail, name='modificador_detail'),
     path("api/v1/productos/<int:producto_id>/modificadores/", views.producto_modificadores, name="producto_modificadores"),
+    path('api/v1/reglas-negocio/', reglas_list, name='reglas_list'),
+    path('api/v1/reglas-negocio/<int:regla_id>/', regla_detail, name='regla_detail'),
+    path('api/v1/metodos-pago/', metodos_pago_list, name='metodos_pago_list'),
+    path('api/v1/metodos-pago/<int:metodo_pago_id>/', metodo_pago_detail, name='metodo_pago_detail'),
+    path("api/v1/pedidos/", pedidos_list, name="pedidos_list"),
+    path("api/v1/pedidos/<int:pedido_id>/", pedido_detail, name="pedido_detail"),
+    path("api/v1/pedidos/<int:pedido_id>/detalles/", pedido_detalles_list),
+    path("api/v1/pedidos/detalles/<int:detalle_id>/", pedido_detalle_detail),
+    path("api/v1/pedidos/detalles/<int:detalle_id>/modificadores/", detalle_modificadores_list),
+    path("api/v1/detalles-modificadores/<int:detalle_id>/<int:modificador_id>/", detalle_modificador_detail),
+    path('api/v1/pagos/', pagos_list, name='pagos_list'),
+    path('api/v1/pagos/<int:pago_id>/', pago_detail, name='pago_detail'),
+    path('api/v1/boletas/', boletas_list, name='boletas_list'),
+    path('api/v1/boletas/<int:boleta_id>/', boleta_detail, name='boleta_detail'),
+    path("api/v1/usuarios-sucursales/", usuarios_sucursales_list, name="usuarios_sucursales_list"),
+    path("api/v1/usuarios-sucursales/<int:usuario_sucursal_id>/", usuario_sucursal_detail, name="usuario_sucursal_detail"),
+    path("api/v1/webpay/init/", views.webpay_init, name="webpay-init"),
+    path("api/v1/webpay/transacciones/", webpay_transacciones_list),
+    path("api/v1/webpay/transacciones/<int:transaccion_id>/", webpay_transaccion_detail),
+    path("api/v1/webpay/commit/", views.webpay_commit, name="webpay_commit"),
+    path("api/v1/auditorias/", auditorias_list),
+    path("api/v1/auditorias/<int:auditoria_id>/", auditoria_detail),
+    path("api/v1/cierres-caja/", cierres_caja_list),
+    path("api/v1/cierres-caja/<int:cierre_id>/", cierre_caja_detail),
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/',
+        SpectacularSwaggerView.as_view(url_name='schema'),
+        name='swagger-ui',
+    ),
+    path(
+        'api/redoc/',
+        SpectacularRedocView.as_view(url_name='schema'),
+        name='redoc',
+    ),
 ]

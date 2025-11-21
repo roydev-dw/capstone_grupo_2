@@ -28,7 +28,6 @@ class Sucursal(models.Model):
     def __str__(self):
         return f'{self.nombre} - ({self.empresa.nombre})'
     
-
     
 class Rol(models.Model):
     rol_id = models.AutoField(primary_key=True, db_column='RolId')
@@ -45,17 +44,17 @@ class Rol(models.Model):
 
     def __str__(self):
         return f'{self.nombre} - ({self.empresa.nombre})'
-    
 
 class Usuario(models.Model):
     usuario_id = models.AutoField(primary_key=True, db_column='UsuarioId')
     empresa = models.ForeignKey('Empresa', on_delete=models.CASCADE, db_column='EmpresaId', null=True, blank=True)
-    sucursal = models.ForeignKey('Sucursal', on_delete=models.CASCADE, db_column='SucursalId', null=True, blank=True)
     rol = models.ForeignKey('Rol', on_delete=models.CASCADE, db_column='RolId')
+
     nombre_completo = models.CharField(max_length=100, db_column='Nombre')
     email = models.EmailField(max_length=100, unique=True, db_column='Email')
     contrasena_hash = models.CharField(max_length=128, db_column='ContrasenaHash')
     telefono = models.CharField(max_length=15, db_column='Telefono', blank=True, null=True)
+
     estado = models.BooleanField(default=True, db_column='Estado')
     fecha_creacion = models.DateTimeField(auto_now_add=True, db_column='FechaCreacion')
 
@@ -67,6 +66,26 @@ class Usuario(models.Model):
 
     def __str__(self):
         return f'{self.nombre_completo} - ({self.email})'
+
+class UsuarioSucursal(models.Model):
+    usuario_sucursal_id = models.AutoField(primary_key=True, db_column='UsuarioSucursalId')
+    usuario = models.ForeignKey('Usuario', on_delete=models.CASCADE, db_column='UsuarioId')
+    sucursal = models.ForeignKey('Sucursal', on_delete=models.CASCADE, db_column='SucursalId')
+
+    fecha_asignacion = models.DateTimeField(db_column='FechaAsignacion', auto_now_add=True)
+    estado = models.BooleanField(default=True, db_column='Estado')
+
+    class Meta:
+        managed = False  # 🔥 Importante: la tabla ya existe
+        db_table = 'UsuariosSucursales'
+        verbose_name = 'Usuario-Sucursal'
+        verbose_name_plural = 'Usuarios-Sucursales'
+        unique_together = (('usuario', 'sucursal'),)
+
+    def __str__(self):
+        activo = "Activo" if self.estado else "Inactivo"
+        return f'{self.usuario.nombre_completo} ➜ {self.sucursal.nombre} ({activo})'
+
     
 class Categoria(models.Model):
     categoria_id = models.AutoField(primary_key=True, db_column='CategoriaId')
@@ -108,7 +127,7 @@ class Producto(models.Model):
     producto_id = models.AutoField(primary_key=True, db_column='ProductoId')
     categoria = models.ForeignKey('Categoria', on_delete=models.SET_NULL, db_column='CategoriaId', null=True, blank=True)
 
-    nombre = models.CharField(max_length=100, db_column='Nombre')  # si quieres ceñirte al diagrama estricto usa 100 o 100? (en tu lista pusiste varchar_100)
+    nombre = models.CharField(max_length=100, db_column='Nombre')  
     descripcion = models.CharField(max_length=200, db_column='Descripcion', blank=True, null=True)
 
     precio_base = models.DecimalField(max_digits=10, decimal_places=2, db_column='PrecioBase')
@@ -159,7 +178,7 @@ class ReglaNegocio(models.Model):
         db_column='AccionModificadorId'
     )
 
-    tipo_regla = models.CharField(max_length=20, db_column='TipoRegla')  # Ej: 'obliga', 'excluye'
+    tipo_regla = models.CharField(max_length=20, db_column='TipoRegla')  
     descripcion = models.CharField(max_length=200, db_column='Descripcion', blank=True, null=True)
 
     class Meta:
@@ -335,8 +354,8 @@ class Auditoria(models.Model):
     sucursal = models.ForeignKey('Sucursal', on_delete=models.CASCADE, db_column='SucursalId')
 
     accion = models.CharField(max_length=50, db_column='Accion')       # Ej: CREAR, ACTUALIZAR, ELIMINAR
-    entidad = models.CharField(max_length=50, db_column='Entidad')     # Nombre de la tabla/entidad afectada
-    entidad_id = models.IntegerField(db_column='EntidadId')            # Id del registro afectado
+    entidad = models.CharField(max_length=50, db_column='Entidad', null=True)     # Nombre de la tabla/entidad afectada
+    entidad_id = models.IntegerField(db_column='EntidadId', null=True)            # Id del registro afectado
 
     detalles = models.TextField(db_column='Detalles', blank=True, null=True)
     ip = models.CharField(max_length=45, db_column='IP', blank=True, null=True)  # IPv4 o IPv6
@@ -350,3 +369,18 @@ class Auditoria(models.Model):
 
     def __str__(self):
         return f'Auditoría {self.accion} en {self.entidad} (ID {self.entidad_id})' 
+
+
+class TransaccionWebpay(models.Model):
+    transaccion_id = models.AutoField(primary_key=True)
+    pedido = models.ForeignKey('Pedido', on_delete=models.CASCADE)
+    token = models.CharField(max_length=200)
+    buy_order = models.CharField(max_length=100)
+    session_id = models.CharField(max_length=100)
+    monto = models.DecimalField(max_digits=12, decimal_places=2)
+    estado = models.CharField(max_length=20, default="pendiente")  # pendiente, autorizado, rechazado
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "TransaccionesWebpay"

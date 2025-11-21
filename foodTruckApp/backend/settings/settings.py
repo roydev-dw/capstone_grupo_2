@@ -33,7 +33,7 @@ ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     '20.172.13.183',
-    'http://foodtrucksapp.cl'
+    'http://foodtrucksapp.cl',
     'https://foodtrucksapp.cl',
     'http://www.foodtrucksapp.cl',
     'https://www.foodtrucksapp.cl',
@@ -53,6 +53,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',
 ]
 
 MIDDLEWARE = [
@@ -65,6 +68,67 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'core.authentication.CustomJWTAuthentication', 
+        'rest_framework.authentication.BasicAuthentication', 
+    ),
+}
+
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'FoodTruck API',
+    'DESCRIPTION': 'API para gestión de empresa, sucursales, productos, pedidos, pagos y auditoría de la FoodTruckApp.',
+    'VERSION': '1.0.0',
+
+    'SERVE_INCLUDE_SCHEMA': False,
+
+    'SECURITY': [
+        {'BearerAuth': []}
+    ],
+
+    'COMPONENTS': {
+        'securitySchemes': {
+            'BearerAuth': {
+                'type': 'http',
+                'scheme': 'bearer',
+                'bearerFormat': 'JWT',
+            },
+            'basicAuth': {
+                'type': 'http',
+                'scheme': 'basic'
+            },
+        }
+    },
+
+    'SERVE_AUTHENTICATION': [
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+
+    'SWAGGER_UI_SETTINGS': {
+        "persistAuthorization": True,
+        "requestInterceptor": "function(req) { return req; }",
+        "responseInterceptor": """
+            function(res) {
+                try {
+                    if (res && res.url && res.url.includes('/api/v1/auth/login/') && res.status === 200) {
+                        const data = JSON.parse(res.data);
+                        if (data.access) {
+                            window.ui.preauthorizeApiKey('BearerAuth', data.access);
+                            console.log('✔ JWT asignado automáticamente en Swagger (BearerAuth).');
+                        }
+                    }
+                } catch (e) {
+                    console.error('⚠️ Error procesando token JWT:', e);
+                }
+                return res;
+            }
+        """,
+    },
+}
 
 CORS_ALLOW_ALL_ORIGINS = True
 
@@ -89,18 +153,36 @@ TEMPLATES = [
 WSGI_APPLICATION = 'settings.wsgi.application'
 
 
-# --- Configuración Key Vault ---
+# ============================================================
+# 🔐 CONFIGURACIÓN AZURE KEY VAULT (DB + WEBPAY)
+# ============================================================
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
+
 KEY_VAULT_URL = "https://keysfoodtruckapp.vault.azure.net/"
+
+DB_PASSWORD = ""
+WEBPAY_COMMERCE_CODE = None
+WEBPAY_API_KEY = None
+WEBPAY_URL = "https://webpay3gint.transbank.cl"
 
 try:
     credential = DefaultAzureCredential()
     client = SecretClient(vault_url=KEY_VAULT_URL, credential=credential)
+
+    # --- 🔑 DB Password ---
     DB_PASSWORD = client.get_secret("dbpassword").value
+
+    # --- 💳 Webpay credentials ---
+    WEBPAY_COMMERCE_CODE = client.get_secret("webpay-commerce-code").value
+    WEBPAY_API_KEY = client.get_secret("webpay-api-key").value
+
 except Exception as e:
-    # Si hay error, dejamos un fallback (útil en desarrollo)
-    print("⚠️ No se pudo obtener el secreto de Key Vault:", e)
+    print("⚠️ No se pudieron obtener secretos desde Key Vault:", e)
+    # Fallbacks útiles en desarrollo local
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-# --------------------------------
+    WEBPAY_COMMERCE_CODE = os.getenv("WEBPAY_COMMERCE_CODE", "")
+    WEBPAY_API_KEY = os.getenv("WEBPAY_API_KEY", "")
 
 DATABASES = {
     'default': {
