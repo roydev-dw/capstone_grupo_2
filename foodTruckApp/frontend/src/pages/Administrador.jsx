@@ -20,6 +20,7 @@ import { EMPRESA_PUNTO_SABOR_ID, perteneceAEmpresa, getEmpresaIdFromUser } from 
 import { FoodtruckIcon } from '../components/ui/Iconos';
 import { categoriasRepo } from '../utils/repoCategorias';
 import { PanelModificadores } from '../components/paneles/PanelModificadores';
+import { metricasRepo } from '../utils/repoMetricas';
 
 const quickActions = [
   {
@@ -60,27 +61,6 @@ const quickActions = [
   },
 ];
 
-const metricHighlights = [
-  {
-    id: 'ventas',
-    label: 'Ventas mes actual',
-    value: '$12.4M',
-    detail: '+8% vs mes anterior',
-  },
-  {
-    id: 'ticket',
-    label: 'Ticket promedio',
-    value: '$8.460',
-    detail: '+3% vs semana pasada',
-  },
-  {
-    id: 'pedidos',
-    label: 'Pedidos sincronizados',
-    value: '986',
-    detail: '4 pendientes por revisar',
-  },
-];
-
 const QuickActionCard = ({ action, onClick }) => {
   const Icon = action?.icon;
 
@@ -104,7 +84,84 @@ const MetricCard = ({ metric }) => (
   <div className='rounded-2xl bg-elemento p-5 shadow-md ring-1 ring-placeholder'>
     <p className='text-xs uppercase tracking-wide'>{metric.label}</p>
     <p className='mt-2 text-2xl font-semibold'>{metric.value}</p>
-    <p className='text-xs font-medium text-primario'>{metric.detail}</p>
+    {metric.detail && <p className='text-xs font-medium text-primario'>{metric.detail}</p>}
+  </div>
+);
+
+const formatCurrency = (value) => {
+  const v = Number(value || 0);
+  return v.toLocaleString('es-CL', {
+    style: 'currency',
+    currency: 'CLP',
+    maximumFractionDigits: 0,
+  });
+};
+
+const formatNumber = (value) => {
+  return Number(value || 0).toLocaleString('es-CL');
+};
+
+const DonutMetricCard = ({ label, percentage, primaryLabel, secondaryLabel }) => {
+  const pct = Math.max(0, Math.min(100, Number.isFinite(percentage) ? percentage : 0));
+  const radius = 36;
+  const strokeWidth = 8;
+  const normalizedRadius = radius - strokeWidth / 2;
+  const circumference = 2 * Math.PI * normalizedRadius;
+  const strokeDashoffset = circumference - (pct / 100) * circumference;
+
+  return (
+    <div className='flex items-center gap-4 rounded-2xl bg-elemento p-4 shadow-md ring-1 ring-placeholder'>
+      <svg height={radius * 2} width={radius * 2}>
+        <circle
+          stroke='rgba(148, 163, 184, 0.4)'
+          fill='transparent'
+          strokeWidth={strokeWidth}
+          r={normalizedRadius}
+          cx={radius}
+          cy={radius}
+        />
+        <circle
+          stroke='currentColor'
+          className='text-primario'
+          fill='transparent'
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${circumference} ${circumference}`}
+          style={{ strokeDashoffset }}
+          strokeLinecap='round'
+          r={normalizedRadius}
+          cx={radius}
+          cy={radius}
+          transform={`rotate(-90 ${radius} ${radius})`}
+        />
+        <text
+          x='50%'
+          y='50%'
+          dominantBaseline='middle'
+          textAnchor='middle'
+          className='text-sm font-semibold fill-current'>
+          {Math.round(pct)}%
+        </text>
+      </svg>
+
+      <div className='flex flex-col'>
+        <p className='text-xs uppercase tracking-wide text-texto-suave'>{label}</p>
+        <p className='text-sm font-semibold text-texto'>{primaryLabel}</p>
+        {secondaryLabel && <p className='text-xs text-texto-suave'>{secondaryLabel}</p>}
+      </div>
+    </div>
+  );
+};
+
+const WideMetricCard = ({ title, subtitle, mainValue, helper }) => (
+  <div className='flex flex-col justify-between rounded-2xl bg-elemento px-6 py-4 shadow-md ring-1 ring-placeholder'>
+    <div>
+      <p className='text-xs uppercase tracking-wide text-texto-suave'>{title}</p>
+      {subtitle && <p className='text-sm text-texto-suave mt-1'>{subtitle}</p>}
+    </div>
+    <div className='mt-3 flex items-baseline gap-3'>
+      <p className='text-3xl font-bold tracking-tight'>{mainValue}</p>
+      {helper && <p className='text-xs text-texto-suave'>{helper}</p>}
+    </div>
   </div>
 );
 
@@ -118,6 +175,9 @@ export const Administrador = () => {
   const [loadingSucursales, setLoadingSucursales] = useState(true);
   const [errorSucursales, setErrorSucursales] = useState('');
   const [selectedSucursalId, setSelectedSucursalId] = useState('');
+
+  const [metricas, setMetricas] = useState(null);
+  const [loadingMetricas, setLoadingMetricas] = useState(true);
 
   const usuariosRef = useRef(null);
   const categoriasRef = useRef(null);
@@ -249,7 +309,7 @@ export const Administrador = () => {
         }
       } catch (err) {
         if (!cancelled) {
-          console.error('No se pudieron cargar las categor?as para la sucursal seleccionada.', err);
+          console.error('No se pudieron cargar las categorías para la sucursal seleccionada.', err);
           setCategoriasActivas([]);
         }
       }
@@ -259,6 +319,99 @@ export const Administrador = () => {
       cancelled = true;
     };
   }, [sucursalId]);
+
+  // Cargar métricas desde el backend
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!empresaId) {
+      setMetricas(null);
+      setLoadingMetricas(false);
+      return;
+    }
+
+    setLoadingMetricas(true);
+
+    (async () => {
+      try {
+        const data = await metricasRepo.getDashboard({
+          empresaId: Number(empresaId),
+          sucursalId: sucursalId ? Number(sucursalId) : undefined,
+        });
+
+        if (!cancelled) {
+          setMetricas(data);
+        }
+      } catch (err) {
+        console.error('Error cargando métricas:', err);
+        if (!cancelled) setMetricas(null);
+      } finally {
+        if (!cancelled) setLoadingMetricas(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [empresaId, sucursalId]);
+
+  // buscar promedio de la sucursal seleccionada en el array promedio_ventas_mensual_por_sucursal
+  const promedioSucursalSeleccionada = useMemo(() => {
+    if (!metricas || !sucursalId) return null;
+
+    const lista = metricas.promedio_ventas_mensual_por_sucursal || [];
+    const match = lista.find((s) => String(s.sucursal_id) === String(sucursalId));
+
+    return match || null;
+  }, [metricas, sucursalId]);
+
+  const metricHighlights = useMemo(() => {
+    if (!metricas) return [];
+
+    const haySucursalSeleccionada = Boolean(sucursalId);
+
+    return [
+      {
+        id: 'ventas_dia',
+        label: 'Ventas del día (empresa)',
+        value: formatCurrency(metricas.ventas_dia),
+        detail: `${formatNumber(metricas.pedidos_dia)} pedidos hoy`,
+      },
+      {
+        id: 'ventas_mes',
+        label: 'Ventas mes actual (empresa)',
+        value: formatCurrency(metricas.ventas_totales_mes_empresa),
+        detail: 'Mejor sucursal: ' + (metricas.sucursal_mejor_mes?.sucursal || '—'),
+      },
+      {
+        id: 'promedio_sucursal',
+        label: haySucursalSeleccionada ? 'Promedio mensual sucursal seleccionada' : 'Promedio mensual sucursal',
+        value: haySucursalSeleccionada
+          ? promedioSucursalSeleccionada
+            ? formatCurrency(promedioSucursalSeleccionada.promedio)
+            : '—'
+          : formatCurrency(metricas.promedio_ventas_mensual_por_sucursal?.[0]?.promedio || 0),
+        detail: haySucursalSeleccionada
+          ? promedioSucursalSeleccionada
+            ? promedioSucursalSeleccionada.nombre
+            : 'Sin datos para la sucursal seleccionada'
+          : metricas.promedio_ventas_mensual_por_sucursal?.[0]?.nombre || 'Sin datos de sucursal',
+      },
+    ];
+  }, [metricas, promedioSucursalSeleccionada, sucursalId]);
+
+  const porcentajeDiaVsMes = useMemo(() => {
+    if (!metricas || !metricas.ventas_totales_mes_empresa) return 0;
+    return (metricas.ventas_dia / metricas.ventas_totales_mes_empresa) * 100;
+  }, [metricas]);
+
+  const porcentajeSucursalTop = useMemo(() => {
+    if (!metricas || !metricas.ventas_totales_mes_empresa) return 0;
+    return (metricas.sucursal_mejor_mes.total / metricas.ventas_totales_mes_empresa) * 100;
+  }, [metricas]);
+
+  const productoMasVendido = (metricas && metricas.producto_mas_vendido_mes?.producto) || '—';
+  const cantidadProductoMasVendido = (metricas && metricas.producto_mas_vendido_mes?.cantidad) || 0;
 
   const handleQuickAction = (id) => {
     setOpenPanel((curr) => (curr === id ? null : id));
@@ -284,18 +437,64 @@ export const Administrador = () => {
           </p>
         </div>
 
+        {/* MÉTRICAS GENERALES */}
         <section className='space-y-4'>
           <div>
             <h2 className='text-xl font-semibold text-texto'>Métricas generales</h2>
             <p className='text-gray-600'>Indicadores base para monitorear el desempeño tus foodtrucks.</p>
           </div>
-          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
-            {metricHighlights.map((metric) => (
-              <MetricCard key={metric.id} metric={metric} />
-            ))}
-          </div>
+
+          {loadingMetricas ? (
+            <p className='text-sm text-texto-suave'>Cargando métricas...</p>
+          ) : !metricas ? (
+            <p className='text-sm text-peligro'>No pudimos cargar las métricas en este momento.</p>
+          ) : (
+            <>
+              <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
+                {metricHighlights.map((metric) => (
+                  <MetricCard key={metric.id} metric={metric} />
+                ))}
+              </div>
+
+              {/* Cards alargadas con números grandes */}
+              <div className='grid gap-4 lg:grid-cols-2 mt-4'>
+                <WideMetricCard
+                  title='Mejor sucursal del mes'
+                  subtitle={metricas.sucursal_mejor_mes?.sucursal || '—'}
+                  mainValue={formatCurrency(metricas.sucursal_mejor_mes?.total || 0)}
+                  helper={'Total ventas mes empresa: ' + formatCurrency(metricas.ventas_totales_mes_empresa)}
+                />
+
+                <WideMetricCard
+                  title='Producto más vendido del mes'
+                  subtitle={productoMasVendido}
+                  mainValue={`${formatNumber(cantidadProductoMasVendido)} uds`}
+                  helper='Cantidad total vendida este mes'
+                />
+              </div>
+
+              {/* Donuts */}
+              <div className='grid gap-4 sm:grid-cols-2 mt-4'>
+                <DonutMetricCard
+                  label='Avance de ventas del día'
+                  percentage={porcentajeDiaVsMes}
+                  primaryLabel={`${formatCurrency(metricas.ventas_dia)} vs ${formatCurrency(
+                    metricas.ventas_totales_mes_empresa
+                  )} del mes`}
+                  secondaryLabel='Comparación ventas día / mes'
+                />
+                <DonutMetricCard
+                  label='Participación sucursal top'
+                  percentage={porcentajeSucursalTop}
+                  primaryLabel={metricas.sucursal_mejor_mes?.sucursal || '—'}
+                  secondaryLabel={`De ${formatCurrency(metricas.ventas_totales_mes_empresa)} vendidos en el mes`}
+                />
+              </div>
+            </>
+          )}
         </section>
 
+        {/* SECCIÓN SUCURSALES */}
         <section className='space-y-6 mt-20'>
           <div>
             <h2 className='text-xl font-semibold'>Crea y selecciona tus sucursales</h2>
@@ -319,7 +518,7 @@ export const Administrador = () => {
                 {loadingSucursales ? (
                   <p className='text-sm text-texto-suave'>Cargando foodtrucks disponibles...</p>
                 ) : sucursalesDisponibles.length === 0 ? (
-                  <p className='text-sm text-texto-suave'>Todav?a no registras foodtrucks para esta empresa.</p>
+                  <p className='text-sm text-texto-suave'>Todavía no registras foodtrucks para esta empresa.</p>
                 ) : (
                   <div className='grid gap-8 sm:grid-cols-2 lg:grid-cols-3'>
                     {[...sucursalesDisponibles]
@@ -398,6 +597,7 @@ export const Administrador = () => {
           )}
         </section>
 
+        {/* ACCIONES RÁPIDAS Y PANELES */}
         {hasSucursalSeleccionada && (
           <section className='space-y-12'>
             <div>

@@ -61,14 +61,31 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
     setPreviewUrl('');
   }, [formProd.imagen_file]);
 
-  // Cargar productos para la sucursal
+  // Cargar productos para la sucursal, filtrando por categorías de esa sucursal
   const cargarProductos = async () => {
-    if (sucursalId == null) {
+    // Si no hay sucursal o no hay categorías para esa sucursal, no mostramos nada
+    if (sucursalId == null || !Array.isArray(categoriasActivas) || categoriasActivas.length === 0) {
       setProductos([]);
       return;
     }
-    const { items } = await productosRepo.list({ sucursalId });
-    const filtrados = items.filter((p) => (showDisabledProd ? true : p.estado !== false));
+
+    // IDs de categorías asociadas a la sucursal seleccionada
+    const allowedCategoryIds = categoriasActivas
+      .map((c) => c.categoria_id ?? c.id)
+      .filter((id) => id != null)
+      .map((id) => String(id).trim());
+
+    const { items } = await productosRepo.list({
+      sucursalId, // opcional, por si el repo lo usa para algo extra
+      allowedCategoryIds, // clave: filtramos por categorías, no por sucursal en el producto
+    });
+
+    const categoriaSet = new Set(allowedCategoryIds);
+
+    const filtrados = items
+      .filter((p) => categoriaSet.has(String(p.categoria_id ?? '').trim()))
+      .filter((p) => (showDisabledProd ? true : p.estado !== false));
+
     setProductos(filtrados);
   };
 
@@ -93,7 +110,9 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
     (async () => {
       setLoadingProd(true);
       setErrorProd('');
-      setPage(1); // reset paginación cuando cambia sucursal o filtro
+      setPage(1); // reset paginación cuando cambia sucursal, categorias o filtro
+      setProductos([]);
+
       try {
         await cargarProductos();
         await cargarModificadoresDisponibles();
@@ -104,7 +123,7 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showDisabledProd, sucursalId, empresaId]);
+  }, [showDisabledProd, sucursalId, empresaId, categoriasActivas]);
 
   const resetFormProd = () => {
     setEditProdId(null);
@@ -359,11 +378,14 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
             onChange={(e) => setFormProd((f) => ({ ...f, categoria_id: e.target.value }))}
             className='border border-gray-300 rounded-lg px-3 py-2 w-full'>
             <option value=''>Seleccione…</option>
-            {categoriasActivas.map((c) => (
-              <option key={c.categoria_id} value={c.categoria_id}>
-                {c.nombre}
-              </option>
-            ))}
+            {categoriasActivas.map((c) => {
+              const catId = c.categoria_id ?? c.id;
+              return (
+                <option key={catId} value={catId}>
+                  {c.nombre}
+                </option>
+              );
+            })}
           </select>
         </div>
 

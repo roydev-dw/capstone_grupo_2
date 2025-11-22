@@ -5,14 +5,17 @@ import { enqueueOutbox } from './offlineQueue';
 const ENDPOINT_BASE = 'v1/categorias/';
 const nowIso = () => new Date().toISOString();
 
-const pickList = (res) =>
-  Array.isArray(res?.results)
-    ? res.results
-    : Array.isArray(res?.data?.results)
-    ? res.data.results
-    : Array.isArray(res)
-    ? res
-    : [];
+const pickList = (res) => {
+  if (!res) return [];
+  const payload = res?.data ?? res;
+
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.categorias)) return payload.categorias;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload)) return payload;
+
+  return [];
+};
 
 const pickObject = (res) => res?.data ?? res?.result ?? res ?? null;
 const normalizeSucursalId = (value) => {

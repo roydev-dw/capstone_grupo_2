@@ -86,6 +86,7 @@ const normalizeSucursalId = (value) => {
   return Number.isNaN(num) ? null : num;
 };
 
+// ya no lo usamos en list, pero lo dejamos por compatibilidad
 const filterBySucursal = (items, sucursalId) => {
   if (sucursalId == null) return items;
   return items.filter((item) => Number(item.sucursal_id ?? item.sucursalId) === sucursalId);
@@ -132,6 +133,7 @@ function mapProductFromApi(p, extra = {}) {
     syncedAt: extra.syncedAt ?? nowIso(),
     lastError: extra.lastError ?? null,
     pendingOp: extra.pendingOp ?? null,
+    // sucursal_id lo usamos solo para offline / crear/actualizar, no para listar
     sucursal_id:
       p?.sucursal_id != null
         ? Number(p.sucursal_id)
@@ -489,64 +491,51 @@ export const productosRepo = {
   async list(options = {}) {
     const sucursalNumber = normalizeSucursalId(options.sucursalId);
 
+    // allowedCategoryIds puede venir explícito desde el panel
     let allowedCategoryIds = null;
 
     if (Array.isArray(options.allowedCategoryIds) && options.allowedCategoryIds.length) {
       allowedCategoryIds = new Set(
-        options.allowedCategoryIds
-          .map((value) => {
-            if (value && typeof value === 'object' && (value.categoria_id != null || value.id != null)) {
-              return String(value.categoria_id ?? value.id ?? '');
-            }
-            return String(value ?? '');
-          })
-          .map((value) => value.trim())
-          .filter((value) => value !== '')
+        options.allowedCategoryIds.map((value) => String(value).trim()).filter((value) => value !== '')
       );
     } else if (sucursalNumber != null) {
+      // Si no vienen categorías explícitas, usamos las categorías de esa sucursal
       const { items: categoriasPermitidas = [] } = await categoriasRepo.listAll({
         sucursalId: sucursalNumber,
       });
-      // SOLO filtramos por categoría si realmente hay categorías permitidas
       if (categoriasPermitidas.length) {
         allowedCategoryIds = new Set(
           categoriasPermitidas
             .map((cat) => String(cat.categoria_id ?? cat.id ?? '').trim())
             .filter((value) => value !== '')
         );
-      } else {
-        allowedCategoryIds = null; // no filtres nada si no hay categorías
       }
     }
 
-    const query = sucursalNumber != null ? `?sucursal_id=${sucursalNumber}` : '';
-
+    // Ya no filtramos por sucursal en el endpoint, solo traemos productos
     try {
-      const res = await apiFoodTrucks.get(`${ENDPOINT_BASE}${query}`);
+      const res = await apiFoodTrucks.get(ENDPOINT_BASE);
       const data = await unwrapResponse(res);
 
       const fetchedItems = pickList(data).map((x) =>
         mapProductFromApi(x.producto ?? x, {
           pending: false,
           pendingOp: null,
-          sucursal_id: sucursalNumber != null ? sucursalNumber : x?.sucursal_id ?? x?.producto?.sucursal_id,
         })
       );
 
-      const filteredFromBackend = filterBySucursal(fetchedItems, sucursalNumber).filter((item) => {
-        if (!allowedCategoryIds) return true;
-        const catId = String(item.categoria_id ?? '').trim();
-        if (!catId) return false;
-        return allowedCategoryIds.has(catId);
-      });
+      // Filtramos por categoría si corresponde
+      const filteredFromBackend = allowedCategoryIds
+        ? fetchedItems.filter((item) => {
+            const catId = String(item.categoria_id ?? '').trim();
+            if (!catId) return false;
+            return allowedCategoryIds.has(catId);
+          })
+        : fetchedItems;
 
       await db.transaction('rw', db.products, async () => {
         const pendingLocals = await db.products.where('pendingFlag').equals(1).toArray();
-        const pendingMap = new Map(
-          pendingLocals
-            .filter((item) => (sucursalNumber == null ? true : Number(item.sucursal_id) === sucursalNumber))
-            .map((item) => [item.id, item])
-        );
+        const pendingMap = new Map(pendingLocals.map((item) => [item.id, item]));
         const serverIds = new Set(filteredFromBackend.map((item) => item.id));
 
         const toPersist = filteredFromBackend.map((item) => {
@@ -562,46 +551,34 @@ export const productosRepo = {
 
         if (toPersist.length) await db.products.bulkPut(toPersist);
 
-        const scopedCollection =
-          sucursalNumber != null ? db.products.where('sucursal_id').equals(sucursalNumber) : db.products;
-        const staleKeys = await scopedCollection
+        // limpiamos del cache productos que ya no vienen del servidor
+        const staleKeys = await db.products
           .filter((p) => !p.pending && !p.tempId && !!p.id && !serverIds.has(p.id))
           .primaryKeys();
         if (staleKeys.length) await db.products.bulkDelete(staleKeys);
       });
 
-      let ordered;
-      if (sucursalNumber != null) {
-        let scoped = await db.products.where('sucursal_id').equals(sucursalNumber).toArray();
-        if (allowedCategoryIds) {
-          scoped = scoped.filter((item) => {
-            const catId = String(item.categoria_id ?? '').trim();
-            if (!catId) return false;
-            return allowedCategoryIds.has(catId);
-          });
-        }
-        ordered = sortByUpdatedDesc(scoped);
-      } else {
-        ordered = await db.products.orderBy('updatedAt').reverse().toArray();
+      let ordered = await db.products.orderBy('updatedAt').reverse().toArray();
+
+      if (allowedCategoryIds) {
+        ordered = ordered.filter((item) => {
+          const catId = String(item.categoria_id ?? '').trim();
+          return catId && allowedCategoryIds.has(catId);
+        });
       }
 
       return { items: ordered, source: 'network' };
     } catch (err) {
       console.error('Error fetching products from network, falling back to cache', err);
-      let cached;
-      if (sucursalNumber != null) {
-        let scoped = await db.products.where('sucursal_id').equals(sucursalNumber).toArray();
-        if (allowedCategoryIds) {
-          scoped = scoped.filter((item) => {
-            const catId = String(item.categoria_id ?? '').trim();
-            if (!catId) return false;
-            return allowedCategoryIds.has(catId);
-          });
-        }
-        cached = sortByUpdatedDesc(scoped);
-      } else {
-        cached = await db.products.orderBy('updatedAt').reverse().toArray();
+      let cached = await db.products.orderBy('updatedAt').reverse().toArray();
+
+      if (allowedCategoryIds) {
+        cached = cached.filter((item) => {
+          const catId = String(item.categoria_id ?? '').trim();
+          return catId && allowedCategoryIds.has(catId);
+        });
       }
+
       return { items: cached, source: 'cache' };
     }
   },

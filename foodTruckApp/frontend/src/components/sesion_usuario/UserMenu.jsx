@@ -24,14 +24,11 @@ export const UserMenu = ({ user: userProp, onLogout, className = '' }) => {
       <div className='flex items-center gap-3'>
         <RoleNavigator />
         <div className='flex flex-col text-right'>
-          <span className='text-xl font-black text-secundario'>{displayName}</span>
-          <span className='text-sm font-semibold text-primario'>{displayRole}</span>
+          <span className='text-xl font-black text-secundario hidden md:block'>{displayName}</span>
+          <span className='text-sm font-semibold text-primario hidden md:block'>{displayRole}</span>
         </div>
       </div>
-      <Button
-        color='secundario'
-        onClick={handleLogout}
-        className='ml-2'>
+      <Button color='secundario' onClick={handleLogout} className='ml-2'>
         Cerrar sesion
       </Button>
     </div>
