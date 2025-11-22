@@ -14,7 +14,7 @@ const ADJACENCY_BY_ROLE = {
     '/panel': {},
   },
   administrador: {
-    '/admin': { prev: '/panel' },
+    '/admin': {},
   },
 };
 
