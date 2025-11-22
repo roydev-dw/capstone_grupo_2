@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, forwardRef, useImperativeHandle } from 're
 import { productosRepo } from '../../utils/repoProductos';
 import { productoModificadoresRepo } from '../../utils/repoProductoModificador';
 import { modificadoresRepo } from '../../utils/repoModificadores';
+import { isOnline } from '../../utils/db';
 import { toast } from 'react-hot-toast';
 import { Button } from '../ui/Button';
 import { IoClose } from 'react-icons/io5';
@@ -161,6 +162,7 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
     }
     setSavingProd(true);
     setErrorProd('');
+    const modsToAttach = [...selectedModIds];
 
     try {
       let productoResult;
@@ -195,22 +197,22 @@ export const PanelProductos = forwardRef(({ categoriasActivas = [], sucursalId, 
       // Asociar modificadores al producto (reemplaza todas las asociaciones)
       try {
         const productoId = productoResult?.producto_id ?? productoResult?.id;
-        if (productoId) {
-          await productoModificadoresRepo.replaceAll(productoId, selectedModIds, { sucursalId });
+        const isTemp = String(productoId || '').startsWith('tmp-');
+        if (productoId && isOnline() && !isTemp && modsToAttach.length) {
+          await productoModificadoresRepo.replaceAll(productoId, modsToAttach, { sucursalId });
         }
       } catch (errAssoc) {
         console.error('Error asociando modificadores al producto', errAssoc);
         toast.error('Producto guardado, pero hubo un problema al asociar modificadores.');
       }
-
-      resetFormProd();
-      await cargarProductos();
     } catch (err) {
       const msg = err?.data?.detail || err?.data?.message || err?.message || 'No se pudo guardar el producto';
       setErrorProd(String(msg));
       toast.error(msg);
     } finally {
       setSavingProd(false);
+      resetFormProd();
+      await cargarProductos();
     }
   };
 
