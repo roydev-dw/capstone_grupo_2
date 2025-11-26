@@ -17,7 +17,13 @@ from .auditoria import registrar_auditoria
 from rest_framework.decorators import api_view
 from drf_spectacular.utils import extend_schema
 from datetime import datetime
-
+from django.utils.timezone import now
+from django.db.models import Max
+import os
+from reportlab.lib.pagesizes import letter
+from django.http import FileResponse, Http404
+from django.db.models import Sum, Count, F, Func
+from django.db.models.functions import ExtractDay
 
 
 def _set_token_cookies(resp: JsonResponse, access: str | None, refresh: str | None):
@@ -354,7 +360,7 @@ def logout_api(request):
 @api_view(["GET"])
 @require_jwt
 def me_api(request):
-    u = request.user_obj
+    u = request.user
 
     # Obtener las sucursales activas del usuario
     sucursales = UsuarioSucursal.objects.filter(usuario=u, estado=True)
@@ -2860,6 +2866,56 @@ def boleta_detail(request, boleta_id: int):
     return JsonResponse({"detail": "Método no permitido."}, status=405)
 
 
+@csrf_exempt
+@require_jwt
+def emitir_boleta(request, pedido_id: int):
+
+    if request.method != "POST":
+        return JsonResponse({"detail": "Método no permitido."}, status=405)
+
+    # 1. Buscar pedido
+    try:
+        pedido = Pedido.objects.select_related("sucursal", "usuario").get(pk=pedido_id)
+    except Pedido.DoesNotExist:
+        return JsonResponse({"detail": "Pedido no existe."}, status=404)
+
+    # 2. Monto total = total_neto + iva
+    monto_total = pedido.total_neto + pedido.iva
+
+    # 3. Generar un folio secuencial
+    ultimo_folio = Boleta.objects.aggregate(Max("folio")).get("folio__max") or 0
+    nuevo_folio = ultimo_folio + 1
+
+    # 4. Crear Boleta (solo lo necesario)
+    boleta = Boleta.objects.create(
+        pedido=pedido,
+        folio=nuevo_folio,
+        rut_cliente=None,               # No lo estamos usando por ahora
+        monto_total=monto_total,
+        estado_envio_sii="PENDIENTE",   # placeholder estándar
+        xml_boleta=None,
+        url_pdf=None,
+    )
+
+    # 5. Respuesta limpia
+    return JsonResponse({
+        "ok": True,
+        "boleta_id": boleta.boleta_id,
+        "folio": boleta.folio,
+        "monto_total": str(boleta.monto_total),
+        "pedido": pedido.numero_pedido,
+        "sucursal": pedido.sucursal.nombre,
+        "fecha_emision": boleta.fecha_emision.strftime("%Y-%m-%d %H:%M:%S"),
+        "estado_envio_sii": boleta.estado_envio_sii,
+    }, status=201)
+
+def obtener_metodo_pago(pedido):
+    pago = Pago.objects.filter(pedido=pedido).first()
+    if pago:
+        return pago.metodo_pago.nombre
+    return "No informado"
+
+    
 
 def _usuario_sucursal_to_dict(us: UsuarioSucursal):
     return {
@@ -3394,3 +3450,261 @@ def cierre_caja_detail(request, cierre_id):
         return JsonResponse({"ok": True, "detail": "Cierre eliminado"}, status=200)
 
     return JsonResponse({"detail": "Método no permitido"}, status=405)
+
+@csrf_exempt
+@require_jwt
+def metricas_dashboard(request):
+
+    if request.method != "GET":
+        return JsonResponse({"detail": "Método no permitido"}, status=405)
+
+    from django.utils.timezone import localdate
+    from django.db.models.functions import ExtractDay
+
+    hoy = localdate()
+    inicio_mes = hoy.replace(day=1)
+
+    # ============================
+    # 1. Ventas del día
+    # ============================
+    ventas_dia = Pedido.objects.filter(
+        fecha_hora__date=hoy
+    ).aggregate(
+        total=Sum('total_neto') + Sum('iva')
+    )['total'] or 0
+
+    # ============================
+    # 2. Ventas por sucursal (día actual)
+    # ============================
+    ventas_sucursal = (
+        Pedido.objects.filter(fecha_hora__date=hoy)
+        .order_by()
+        .values("sucursal_id", "sucursal__nombre")
+        .annotate(total=Sum('total_neto') + Sum('iva'))
+    )
+
+    ventas_por_sucursal = [
+        {
+            "sucursal_id": v["sucursal_id"],
+            "nombre": v["sucursal__nombre"],
+            "total": float(v["total"] or 0)
+        }
+        for v in ventas_sucursal
+    ]
+
+    # ============================
+    # 3. Top productos del día
+    # ============================
+    top_productos_raw = (
+        PedidoDetalle.objects.filter(pedido__fecha_hora__date=hoy)
+        .order_by()
+        .values("producto_id", "producto__nombre")
+        .annotate(cantidad=Sum("cantidad"))
+        .order_by("-cantidad")[:5]
+    )
+
+    top_productos = [
+        {
+            "producto_id": p["producto_id"],
+            "nombre": p["producto__nombre"],
+            "cantidad": p["cantidad"]
+        }
+        for p in top_productos_raw
+    ]
+
+    # ============================
+    # 4. Cantidad de pedidos del día
+    # ============================
+    pedidos_dia = Pedido.objects.filter(
+        fecha_hora__date=hoy
+    ).count()
+
+    # ============================
+    # 5. Producto más vendido del mes
+    # ============================
+    prod_mes_raw = (
+        PedidoDetalle.objects.filter(pedido__fecha_hora__date__gte=inicio_mes)
+        .order_by()
+        .values("producto__nombre")
+        .annotate(total_vendido=Sum("cantidad"))
+        .order_by("-total_vendido")
+        .first()
+    )
+
+    producto_mas_vendido_mes = (
+        {
+            "producto": prod_mes_raw["producto__nombre"],
+            "cantidad": prod_mes_raw["total_vendido"]
+        }
+        if prod_mes_raw else None
+    )
+
+    # ============================
+    # 6. Sucursal con mejor rendimiento del mes
+    # ============================
+    suc_mes_raw = (
+        Pedido.objects.filter(fecha_hora__date__gte=inicio_mes)
+        .order_by()
+        .values("sucursal__nombre")
+        .annotate(total_mes=Sum('total_neto') + Sum('iva'))
+        .order_by("-total_mes")
+        .first()
+    )
+
+    sucursal_mejor_mes = (
+        {
+            "sucursal": suc_mes_raw["sucursal__nombre"],
+            "total": float(suc_mes_raw["total_mes"])
+        }
+        if suc_mes_raw else None
+    )
+
+    # ============================
+    # 7. Ventas por día del mes
+    # ============================
+    ventas_mensuales = (
+        Pedido.objects.filter(fecha_hora__date__gte=inicio_mes)
+        .order_by()
+        .annotate(dia=ExtractDay('fecha_hora'))
+        .values("dia")
+        .annotate(total=Sum('total_neto') + Sum('iva'))
+        .order_by("dia")
+    )
+
+    ventas_mensuales_dias = [
+        {
+            "dia": v["dia"],
+            "total": float(v["total"] or 0)
+        }
+        for v in ventas_mensuales
+    ]
+
+    ventas_totales_mes_empresa = sum(v["total"] for v in ventas_mensuales_dias)
+
+    # ============================
+    # 8. Promedio de ventas mensual por sucursal (NUEVO)
+    # ============================
+    ventas_por_sucursal_mes = (
+        Pedido.objects.filter(fecha_hora__date__gte=inicio_mes)
+        .order_by()
+        .values("sucursal_id", "sucursal__nombre")
+        .annotate(total=Sum("total_neto") + Sum("iva"))
+    )
+
+    # Obtener días activos (días con ventas hechas)
+    dias_activos = ventas_mensuales.count() or 1  # Evita división entre cero
+
+    promedio_ventas_mensual_por_sucursal = [
+        {
+            "sucursal_id": v["sucursal_id"],
+            "nombre": v["sucursal__nombre"],
+            "promedio": float((v["total"] or 0) / dias_activos)
+        }
+        for v in ventas_por_sucursal_mes
+    ]
+
+    # ============================
+    # RESPUESTA FINAL
+    # ============================
+    return JsonResponse({
+        "ventas_dia": float(ventas_dia),
+        "ventas_por_sucursal": ventas_por_sucursal,
+        "top_productos": top_productos,
+        "pedidos_dia": pedidos_dia,
+        "producto_mas_vendido_mes": producto_mas_vendido_mes,
+        "sucursal_mejor_mes": sucursal_mejor_mes,
+        "ventas_mensuales_dias": ventas_mensuales_dias,
+        "ventas_totales_mes_empresa": ventas_totales_mes_empresa,
+        "promedio_ventas_mensual_por_sucursal": promedio_ventas_mensual_por_sucursal,
+    })
+
+@csrf_exempt
+@require_jwt
+def boleta_pdf(request, boleta_id: int):
+    """
+    POST: subir o reemplazar PDF de la boleta
+    DELETE: eliminar PDF de Azure y borrar url_pdf
+    GET: obtener URL del PDF
+    """
+    try:
+        b = Boleta.objects.get(pk=boleta_id)
+    except Boleta.DoesNotExist:
+        return JsonResponse({"detail": "Boleta no existe."}, status=404)
+
+    # ========== GET ==========
+    if request.method == "GET":
+        return JsonResponse({
+            "ok": True,
+            "boleta_id": b.boleta_id,
+            "url_pdf": b.url_pdf
+        })
+
+    # ========== POST (upload o replace) ==========
+    if request.method == "POST":
+        if "pdf" not in request.FILES:
+            return JsonResponse({"detail": "Falta archivo 'pdf'."}, status=400)
+
+        fileobj = request.FILES["pdf"]
+
+        # Validar tamaño
+        max_bytes = getattr(settings, "MAX_UPLOAD_MB", 10) * 1024 * 1024
+        if fileobj.size > max_bytes:
+            return JsonResponse({"detail": f"Archivo supera {settings.MAX_UPLOAD_MB} MB."}, status=400)
+
+        # Subir nuevo PDF
+        try:
+            url = azure_blob.upload_boleta_pdf(b.boleta_id, fileobj, fileobj.name)
+        except Exception as e:
+            return JsonResponse({"detail": f"Error al subir PDF: {str(e)}"}, status=500)
+
+        # Eliminar antiguo si existía
+        if b.url_pdf and b.url_pdf != url:
+            try:
+                azure_blob.delete_by_url(b.url_pdf)
+            except Exception as e:
+                print(f"⚠️ No se pudo eliminar PDF antiguo: {e}")
+
+        # Guardar nueva URL
+        b.url_pdf = url
+        b.save(update_fields=["url_pdf"])
+
+        return JsonResponse({"ok": True, "url_pdf": url}, status=201)
+
+    # ========== DELETE ==========
+    if request.method == "DELETE":
+        if not b.url_pdf:
+            return JsonResponse({"ok": True, "detail": "Boleta no tenía PDF."})
+
+        old = b.url_pdf
+        b.url_pdf = None
+        b.save(update_fields=["url_pdf"])
+
+        try:
+            azure_blob.delete_by_url(old)
+        except Exception as e:
+            print(f"⚠️ No se pudo eliminar del blob: {e}")
+
+        return JsonResponse({"ok": True, "detail": "PDF eliminado."})
+
+    return JsonResponse({"detail": "Método no permitido."}, status=405)
+
+@csrf_exempt
+@require_jwt
+def boleta_generar_pdf(request, boleta_id: int):
+    if request.method != "POST":
+        return JsonResponse({"detail": "Método no permitido."}, status=405)
+
+    try:
+        b = Boleta.objects.get(pk=boleta_id)
+    except Boleta.DoesNotExist:
+        return JsonResponse({"detail": "Boleta no existe."}, status=404)
+
+    from core.services.boleta_pdf_service import generar_y_subir_pdf_boleta
+
+    url = generar_y_subir_pdf_boleta(b)
+
+    return JsonResponse({
+        "ok": True,
+        "boleta_id": b.boleta_id,
+        "url_pdf": url,
+    }, status=200)

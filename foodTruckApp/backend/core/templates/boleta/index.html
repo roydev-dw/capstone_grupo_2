@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Boleta Electrónica</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+
+  <body>
+    <section class="contenedor-todo">
+
+      <div class="contenedor-boleta">
+
+        <!-- LOGO -->
+        <div class="contenedor-logo">
+          <img src="./punto-sabor.png" alt="Logo empresa" />
+        </div>
+
+        <hr />
+
+        <!-- TÍTULO -->
+        <div>
+          <h1>BOLETA ELECTRÓNICA</h1>
+        </div>
+
+        <!-- DATOS EMPRESA / SUCURSAL -->
+        <div class="informacion">
+          <p><b>Empresa:</b> <span id="empresa"></span></p>
+          <p><b>RUT:</b> <span id="rut_empresa"></span></p>
+          <p><b>Sucursal:</b> <span id="sucursal"></span></p>
+          <p><b>Dirección:</b> <span id="direccion"></span></p>
+          <p><b>Fecha:</b> <span id="fecha"></span></p>
+          <p><b>N° Pedido:</b> <span id="pedido"></span></p>
+          <p><b>Folio Boleta:</b> <span id="folio"></span></p>
+          <p><b>Forma de pago:</b> <span id="pago"></span></p>
+        </div>
+
+        <hr />
+
+        <!-- DETALLE CLIENTE (opcional para venta rápida) -->
+        <div class="informacion-cliente">
+          <p><b>Cliente:</b> <span id="cliente">Consumidor Final</span></p>
+          <p><b>RUT Cliente:</b> <span id="rut_cliente">---</span></p>
+        </div>
+
+        <hr />
+
+        <!-- TÍTULO DETALLE -->
+        <div class="contenedor-titulo">
+          <h2>Detalle del pedido</h2>
+        </div>
+        <hr />
+
+        <!-- TABLA DINÁMICA -->
+        <div class="tabla-detalle">
+          <table>
+            <thead>
+              <tr>
+                <th>Cant.</th>
+                <th>Descripción</th>
+                <th>P.Unit</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody id="detalle-body">
+              <!-- FILAS DINÁMICAS DESDE JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <hr />
+
+        <!-- TOTALES -->
+        <div class="totales">
+          <p><b>Neto:</b> <span id="total_neto">$0</span></p>
+          <p><b>IVA:</b> <span id="iva">$0</span></p>
+          <p><b>Total:</b> <span id="total_general">$0</span></p>
+        </div>
+
+      </div>
+
+      <div>
+        <button id="boton-whatsapp">Enviar a WhatsApp</button>
+        <button id="boton-imprimir">Imprimir</button>
+      </div>
+    </section>
+
+    <!-- HTML2CANVAS -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="./boleta.js"></script>
+  </body>
+</html>

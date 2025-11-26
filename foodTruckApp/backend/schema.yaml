@@ -1,0 +1,2590 @@
+openapi: 3.0.3
+info:
+  title: FoodTruck API
+  version: 1.0.0
+  description: API para gestión de empresa, sucursales, productos, pedidos, pagos
+    y auditoría de la FoodTruckApp.
+paths:
+  /api/schema/:
+    get:
+      operationId: schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+
+        - YAML: application/vnd.oai.openapi
+        - JSON: application/vnd.oai.openapi+json
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - af
+          - ar
+          - ar-dz
+          - ast
+          - az
+          - be
+          - bg
+          - bn
+          - br
+          - bs
+          - ca
+          - ckb
+          - cs
+          - cy
+          - da
+          - de
+          - dsb
+          - el
+          - en
+          - en-au
+          - en-gb
+          - eo
+          - es
+          - es-ar
+          - es-co
+          - es-mx
+          - es-ni
+          - es-ve
+          - et
+          - eu
+          - fa
+          - fi
+          - fr
+          - fy
+          - ga
+          - gd
+          - gl
+          - he
+          - hi
+          - hr
+          - hsb
+          - hu
+          - hy
+          - ia
+          - id
+          - ig
+          - io
+          - is
+          - it
+          - ja
+          - ka
+          - kab
+          - kk
+          - km
+          - kn
+          - ko
+          - ky
+          - lb
+          - lt
+          - lv
+          - mk
+          - ml
+          - mn
+          - mr
+          - ms
+          - my
+          - nb
+          - ne
+          - nl
+          - nn
+          - os
+          - pa
+          - pl
+          - pt
+          - pt-br
+          - ro
+          - ru
+          - sk
+          - sl
+          - sq
+          - sr
+          - sr-latn
+          - sv
+          - sw
+          - ta
+          - te
+          - tg
+          - th
+          - tk
+          - tr
+          - tt
+          - udm
+          - ug
+          - uk
+          - ur
+          - uz
+          - vi
+          - zh-hans
+          - zh-hant
+      tags:
+      - schema
+      security:
+      - basicAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/vnd.oai.openapi+json:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/auditorias/:
+    get:
+      operationId: v1_auditorias_retrieve
+      description: |-
+        GET: listar auditoría con filtros
+        POST: crear registro manual (si lo necesitas)
+      summary: Lista registros de auditoría
+      tags:
+      - Auditoría
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_auditorias_create
+      description: |-
+        GET: listar auditoría con filtros
+        POST: crear registro manual (si lo necesitas)
+      summary: Lista registros de auditoría
+      tags:
+      - Auditoría
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auditorias/{auditoria_id}/:
+    get:
+      operationId: v1_auditorias_retrieve_2
+      summary: Detalle de auditoría
+      parameters:
+      - in: path
+        name: auditoria_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Auditoría
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/login/:
+    post:
+      operationId: v1_auth_login_create
+      description: |-
+        Autentica un usuario mediante email y contraseña.
+
+        **Devuelve:**
+        - access_token (Bearer)
+        - refresh_token
+        - datos del usuario
+
+        **Notas:**
+        • Usa Basic Auth solo para este endpoint.
+        • El token se usará luego como Bearer en el resto de la API.
+      summary: Login de usuario
+      tags:
+      - Auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - email
+              - password
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Login exitoso
+                content:
+                  application/json:
+                    example:
+                      ok: true
+                      message: Login exitoso
+                      access_token: <token>
+                      refresh_token: <token_refresh>
+                      usuario:
+                        id: 1
+                        nombre: Admin
+                        email: admin@foodtruck.cl
+                        notas: Copia y pega el Access Token para usar en Authorization
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Credenciales inválidas
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: No autorizado
+          description: ''
+  /api/v1/auth/logout/:
+    post:
+      operationId: v1_auth_logout_create
+      description: |-
+        Realiza el logout **limpiando las cookies** `access_token` y `refresh_token`.
+
+        No invalida tokens en servidor (stateless), solo borra cookies en el cliente.
+      summary: Logout (cierre de sesión)
+      tags:
+      - Auth
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Logout exitoso
+                content:
+                  application/json:
+                    example:
+                      ok: true
+                      detail: Sesión cerrada
+          description: ''
+  /api/v1/auth/me/:
+    get:
+      operationId: v1_auth_me_retrieve
+      description: |-
+        Devuelve los datos del usuario autenticado según el JWT enviado.
+
+        Incluye datos del usuario, rol, empresa, sucursales asignadas y claims del token.
+      summary: Datos del usuario autenticado
+      tags:
+      - Auth
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Datos del usuario autenticado
+                content:
+                  application/json:
+                    example:
+                      ok: true
+                      user:
+                        usuario_id: 1
+                        nombre: Juan Pérez
+                        email: juan@foodtrucksapp.cl
+                        rol: Administrador
+                        empresa_id: 1
+                        sucursales:
+                        - sucursal_id: 1
+                          sucursal_nombre: Sucursal Centro
+                      claims:
+                        sub: 1
+                        type: access
+                        exp: 1732046400
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Sin JWT o token inválido
+                content:
+                  application/json:
+                    example:
+                      detail: Token inválido
+          description: ''
+  /api/v1/auth/refresh/:
+    post:
+      operationId: v1_auth_refresh_create
+      description: |-
+        Recibe un **refresh token** (por cookie `refresh_token` o en el body) y devuelve un **nuevo access token** y un **nuevo refresh token**.
+
+        Si no se envía el token refresh, o es inválido/expirado, responde error.
+      summary: Refrescar token JWT
+      tags:
+      - Auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh:
+                  type: string
+                  description: Refresh token opcional si no viene en cookie `refresh_token`
+              example:
+                refresh: <REFRESH_TOKEN_OPCIONAL>
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Tokens refrescados correctamente
+                content:
+                  application/json:
+                    example:
+                      ok: true
+                      access: <NUEVO_ACCESS_TOKEN>
+                      refresh: <NUEVO_REFRESH_TOKEN>
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Falta token refresh
+                content:
+                  application/json:
+                    example:
+                      detail: Falta token refresh.
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token inválido o usuario inexistente
+                content:
+                  application/json:
+                    examples:
+                      token_invalido:
+                        value:
+                          detail: Token inválido.
+                      tipo_invalido:
+                        value:
+                          detail: Token refresh inválido.
+                      usuario_no_existe:
+                        value:
+                          detail: Usuario no existe.
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Usuario inactivo
+                content:
+                  application/json:
+                    example:
+                      detail: Usuario inactivo.
+          description: ''
+  /api/v1/boletas/:
+    get:
+      operationId: v1_boletas_retrieve
+      description: |-
+        GET  : listar boletas
+        POST : crear boleta (manual o tras Webpay)
+      summary: Lista y crea boletas
+      tags:
+      - Boletas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_boletas_create
+      description: |-
+        GET  : listar boletas
+        POST : crear boleta (manual o tras Webpay)
+      summary: Lista y crea boletas
+      tags:
+      - Boletas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/boletas/{boleta_id}/:
+    get:
+      operationId: v1_boletas_retrieve_2
+      summary: Detalle, actualiza o elimina boleta
+      parameters:
+      - in: path
+        name: boleta_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Boletas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_boletas_update
+      summary: Detalle, actualiza o elimina boleta
+      parameters:
+      - in: path
+        name: boleta_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Boletas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_boletas_partial_update
+      summary: Detalle, actualiza o elimina boleta
+      parameters:
+      - in: path
+        name: boleta_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Boletas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_boletas_destroy
+      summary: Detalle, actualiza o elimina boleta
+      parameters:
+      - in: path
+        name: boleta_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Boletas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/categorias/:
+    get:
+      operationId: v1_categorias_retrieve
+      description: |-
+        GET: lista con filtros y paginación
+          - q (busca por nombre/descripcion)
+          - sucursal_id (filtra por sucursal)
+          - estado (true/false)
+          - ordering (nombre, -fecha_creacion, etc.)
+          - page, page_size
+        POST: crea categoría (REQUERIDOS: nombre, sucursal_id)
+      summary: Lista y crea categorías
+      tags:
+      - Categorías
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_categorias_create
+      description: |-
+        GET: lista con filtros y paginación
+          - q (busca por nombre/descripcion)
+          - sucursal_id (filtra por sucursal)
+          - estado (true/false)
+          - ordering (nombre, -fecha_creacion, etc.)
+          - page, page_size
+        POST: crea categoría (REQUERIDOS: nombre, sucursal_id)
+      summary: Lista y crea categorías
+      tags:
+      - Categorías
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/categorias/{categoria_id}/:
+    get:
+      operationId: v1_categorias_retrieve_2
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar (se puede cambiar sucursal_id)
+        DELETE: soft delete (estado=False) por defecto; hard delete con ?hard=1
+      summary: Detalle, actualiza o elimina categoría
+      parameters:
+      - in: path
+        name: categoria_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Categorías
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_categorias_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar (se puede cambiar sucursal_id)
+        DELETE: soft delete (estado=False) por defecto; hard delete con ?hard=1
+      summary: Detalle, actualiza o elimina categoría
+      parameters:
+      - in: path
+        name: categoria_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Categorías
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_categorias_partial_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar (se puede cambiar sucursal_id)
+        DELETE: soft delete (estado=False) por defecto; hard delete con ?hard=1
+      summary: Detalle, actualiza o elimina categoría
+      parameters:
+      - in: path
+        name: categoria_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Categorías
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_categorias_destroy
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar (se puede cambiar sucursal_id)
+        DELETE: soft delete (estado=False) por defecto; hard delete con ?hard=1
+      summary: Detalle, actualiza o elimina categoría
+      parameters:
+      - in: path
+        name: categoria_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Categorías
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/cierres-caja/:
+    get:
+      operationId: v1_cierres_caja_retrieve
+      summary: Lista y crea cierres de caja
+      tags:
+      - Caja
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_cierres_caja_create
+      summary: Lista y crea cierres de caja
+      tags:
+      - Caja
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/cierres-caja/{cierre_id}/:
+    get:
+      operationId: v1_cierres_caja_retrieve_2
+      summary: Detalle, actualiza o elimina cierre de caja
+      parameters:
+      - in: path
+        name: cierre_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Caja
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_cierres_caja_update
+      summary: Detalle, actualiza o elimina cierre de caja
+      parameters:
+      - in: path
+        name: cierre_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Caja
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_cierres_caja_destroy
+      summary: Detalle, actualiza o elimina cierre de caja
+      parameters:
+      - in: path
+        name: cierre_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Caja
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/detalles-modificadores/{detalle_id}/{modificador_id}/:
+    get:
+      operationId: v1_detalles_modificadores_retrieve
+      summary: Detalle, actualiza o elimina modificador del detalle
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: modificador_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_detalles_modificadores_update
+      summary: Detalle, actualiza o elimina modificador del detalle
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: modificador_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_detalles_modificadores_partial_update
+      summary: Detalle, actualiza o elimina modificador del detalle
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: modificador_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_detalles_modificadores_destroy
+      summary: Detalle, actualiza o elimina modificador del detalle
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: modificador_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/empresas/:
+    get:
+      operationId: v1_empresas_retrieve
+      description: |-
+        GET: lista con filtros/paginación
+          - q (busca en nombre/direccion/email/telefono/rut)
+          - rut (match exacto)
+          - estado (true/false)
+          - ordering (nombre, -fecha_creacion, rut, etc.)
+          - page, page_size
+        POST: crea empresa
+          Campos requeridos: nombre, rut, email
+          Opcionales: direccion, telefono, estado (default True)
+      summary: Lista y crea empresas
+      tags:
+      - Empresas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_empresas_create
+      description: |-
+        GET: lista con filtros/paginación
+          - q (busca en nombre/direccion/email/telefono/rut)
+          - rut (match exacto)
+          - estado (true/false)
+          - ordering (nombre, -fecha_creacion, rut, etc.)
+          - page, page_size
+        POST: crea empresa
+          Campos requeridos: nombre, rut, email
+          Opcionales: direccion, telefono, estado (default True)
+      summary: Lista y crea empresas
+      tags:
+      - Empresas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/empresas/{empresa_id}/:
+    get:
+      operationId: v1_empresas_retrieve_2
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualización de campos
+        DELETE:
+          - soft delete: estado=False
+          - hard delete: ?hard=1
+      summary: Detalle, actualiza o elimina empresa
+      parameters:
+      - in: path
+        name: empresa_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_empresas_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualización de campos
+        DELETE:
+          - soft delete: estado=False
+          - hard delete: ?hard=1
+      summary: Detalle, actualiza o elimina empresa
+      parameters:
+      - in: path
+        name: empresa_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_empresas_partial_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualización de campos
+        DELETE:
+          - soft delete: estado=False
+          - hard delete: ?hard=1
+      summary: Detalle, actualiza o elimina empresa
+      parameters:
+      - in: path
+        name: empresa_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_empresas_destroy
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualización de campos
+        DELETE:
+          - soft delete: estado=False
+          - hard delete: ?hard=1
+      summary: Detalle, actualiza o elimina empresa
+      parameters:
+      - in: path
+        name: empresa_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Empresas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/metodos-pago/:
+    get:
+      operationId: v1_metodos_pago_retrieve
+      description: |-
+        GET: listar métodos de pago
+        POST: crear método de pago
+      summary: Lista y crea métodos de pago
+      tags:
+      - Pagos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_metodos_pago_create
+      description: |-
+        GET: listar métodos de pago
+        POST: crear método de pago
+      summary: Lista y crea métodos de pago
+      tags:
+      - Pagos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/metodos-pago/{metodo_pago_id}/:
+    get:
+      operationId: v1_metodos_pago_retrieve_2
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar
+        DELETE: soft o hard delete
+      summary: Detalle, actualiza o elimina método de pago
+      parameters:
+      - in: path
+        name: metodo_pago_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pagos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_metodos_pago_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar
+        DELETE: soft o hard delete
+      summary: Detalle, actualiza o elimina método de pago
+      parameters:
+      - in: path
+        name: metodo_pago_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pagos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_metodos_pago_partial_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar
+        DELETE: soft o hard delete
+      summary: Detalle, actualiza o elimina método de pago
+      parameters:
+      - in: path
+        name: metodo_pago_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pagos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_metodos_pago_destroy
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar
+        DELETE: soft o hard delete
+      summary: Detalle, actualiza o elimina método de pago
+      parameters:
+      - in: path
+        name: metodo_pago_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pagos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/modificadores/:
+    get:
+      operationId: v1_modificadores_retrieve
+      description: |-
+        GET: lista modificadores (filtrables por empresa, tipo, estado)
+        POST: crea un modificador
+      summary: Lista y crea modificadores
+      tags:
+      - Modificadores
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_modificadores_create
+      description: |-
+        GET: lista modificadores (filtrables por empresa, tipo, estado)
+        POST: crea un modificador
+      summary: Lista y crea modificadores
+      tags:
+      - Modificadores
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/modificadores/{modificador_id}/:
+    get:
+      operationId: v1_modificadores_retrieve_2
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar campos
+        DELETE: baja lógica (estado=False) o hard delete (?hard=1)
+      summary: Detalle, actualiza o elimina modificador
+      parameters:
+      - in: path
+        name: modificador_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Modificadores
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_modificadores_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar campos
+        DELETE: baja lógica (estado=False) o hard delete (?hard=1)
+      summary: Detalle, actualiza o elimina modificador
+      parameters:
+      - in: path
+        name: modificador_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Modificadores
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_modificadores_partial_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar campos
+        DELETE: baja lógica (estado=False) o hard delete (?hard=1)
+      summary: Detalle, actualiza o elimina modificador
+      parameters:
+      - in: path
+        name: modificador_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Modificadores
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_modificadores_destroy
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar campos
+        DELETE: baja lógica (estado=False) o hard delete (?hard=1)
+      summary: Detalle, actualiza o elimina modificador
+      parameters:
+      - in: path
+        name: modificador_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Modificadores
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/pagos/:
+    get:
+      operationId: v1_pagos_retrieve
+      description: |-
+        GET  : listar pagos
+        POST : crear pago manual (no Webpay; Webpay lo hará internamente)
+      summary: Lista y crea pagos
+      tags:
+      - Pagos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_pagos_create
+      description: |-
+        GET  : listar pagos
+        POST : crear pago manual (no Webpay; Webpay lo hará internamente)
+      summary: Lista y crea pagos
+      tags:
+      - Pagos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/pagos/{pago_id}/:
+    get:
+      operationId: v1_pagos_retrieve_2
+      summary: Detalle, actualiza o elimina pago
+      parameters:
+      - in: path
+        name: pago_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pagos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_pagos_update
+      summary: Detalle, actualiza o elimina pago
+      parameters:
+      - in: path
+        name: pago_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pagos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_pagos_partial_update
+      summary: Detalle, actualiza o elimina pago
+      parameters:
+      - in: path
+        name: pago_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pagos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_pagos_destroy
+      summary: Detalle, actualiza o elimina pago
+      parameters:
+      - in: path
+        name: pago_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pagos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/pedidos/:
+    get:
+      operationId: v1_pedidos_retrieve
+      summary: Lista y crea pedidos
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_pedidos_create
+      summary: Lista y crea pedidos
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/pedidos/{pedido_id}/:
+    get:
+      operationId: v1_pedidos_retrieve_2
+      summary: Detalle, actualiza o elimina pedido
+      parameters:
+      - in: path
+        name: pedido_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_pedidos_update
+      summary: Detalle, actualiza o elimina pedido
+      parameters:
+      - in: path
+        name: pedido_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_pedidos_partial_update
+      summary: Detalle, actualiza o elimina pedido
+      parameters:
+      - in: path
+        name: pedido_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_pedidos_destroy
+      summary: Detalle, actualiza o elimina pedido
+      parameters:
+      - in: path
+        name: pedido_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/pedidos/{pedido_id}/detalles/:
+    get:
+      operationId: v1_pedidos_detalles_retrieve_2
+      summary: Lista y crea detalles de pedido
+      parameters:
+      - in: path
+        name: pedido_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_pedidos_detalles_create
+      summary: Lista y crea detalles de pedido
+      parameters:
+      - in: path
+        name: pedido_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/pedidos/detalles/{detalle_id}/:
+    get:
+      operationId: v1_pedidos_detalles_retrieve
+      summary: Detalle, actualiza o elimina detalle de pedido
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_pedidos_detalles_update
+      summary: Detalle, actualiza o elimina detalle de pedido
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_pedidos_detalles_partial_update
+      summary: Detalle, actualiza o elimina detalle de pedido
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_pedidos_detalles_destroy
+      summary: Detalle, actualiza o elimina detalle de pedido
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/pedidos/detalles/{detalle_id}/modificadores/:
+    get:
+      operationId: v1_pedidos_detalles_modificadores_retrieve
+      summary: Lista y crea modificadores del detalle
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_pedidos_detalles_modificadores_create
+      summary: Lista y crea modificadores del detalle
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Pedidos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/productos/:
+    get:
+      operationId: v1_productos_retrieve
+      description: |-
+        GET: lista con filtros y paginación
+          - q (búsqueda por nombre o descripción)
+          - categoria_id
+          - estado (true/false)
+          - ordering (nombre, -precio_base, etc)
+          - page, page_size
+        POST: crea un nuevo producto
+      summary: Lista y crea productos
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_productos_create
+      description: |-
+        GET: lista con filtros y paginación
+          - q (búsqueda por nombre o descripción)
+          - categoria_id
+          - estado (true/false)
+          - ordering (nombre, -precio_base, etc)
+          - page, page_size
+        POST: crea un nuevo producto
+      summary: Lista y crea productos
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/productos/{producto_id}/:
+    get:
+      operationId: v1_productos_retrieve_2
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualización (JSON)
+        DELETE: baja lógica (estado=False) por defecto; hard delete con ?hard=1
+      summary: Detalle, actualiza o elimina producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_productos_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualización (JSON)
+        DELETE: baja lógica (estado=False) por defecto; hard delete con ?hard=1
+      summary: Detalle, actualiza o elimina producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_productos_partial_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualización (JSON)
+        DELETE: baja lógica (estado=False) por defecto; hard delete con ?hard=1
+      summary: Detalle, actualiza o elimina producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_productos_destroy
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualización (JSON)
+        DELETE: baja lógica (estado=False) por defecto; hard delete con ?hard=1
+      summary: Detalle, actualiza o elimina producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/productos/{producto_id}/imagen/:
+    get:
+      operationId: v1_productos_imagen_retrieve
+      description: |-
+        GET    : devuelve URL actual
+        POST   : sube imagen (si había, elimina la anterior)
+        PUT    : reemplaza imagen (igual que POST)
+        DELETE : elimina imagen y limpia imagen_url
+      summary: Imagen del producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_productos_imagen_create
+      description: |-
+        GET    : devuelve URL actual
+        POST   : sube imagen (si había, elimina la anterior)
+        PUT    : reemplaza imagen (igual que POST)
+        DELETE : elimina imagen y limpia imagen_url
+      summary: Imagen del producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_productos_imagen_update
+      description: |-
+        GET    : devuelve URL actual
+        POST   : sube imagen (si había, elimina la anterior)
+        PUT    : reemplaza imagen (igual que POST)
+        DELETE : elimina imagen y limpia imagen_url
+      summary: Imagen del producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_productos_imagen_destroy
+      description: |-
+        GET    : devuelve URL actual
+        POST   : sube imagen (si había, elimina la anterior)
+        PUT    : reemplaza imagen (igual que POST)
+        DELETE : elimina imagen y limpia imagen_url
+      summary: Imagen del producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/productos/{producto_id}/modificadores/:
+    get:
+      operationId: v1_productos_modificadores_retrieve
+      description: |-
+        GET: lista los modificadores asociados a un producto
+        POST: asocia un modificador existente al producto
+        PUT/PATCH: cambia 'es_obligatorio'
+        DELETE: elimina la asociación producto–modificador
+      summary: Lista, crea, actualiza o elimina modificadores de un producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_productos_modificadores_create
+      description: |-
+        GET: lista los modificadores asociados a un producto
+        POST: asocia un modificador existente al producto
+        PUT/PATCH: cambia 'es_obligatorio'
+        DELETE: elimina la asociación producto–modificador
+      summary: Lista, crea, actualiza o elimina modificadores de un producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_productos_modificadores_update
+      description: |-
+        GET: lista los modificadores asociados a un producto
+        POST: asocia un modificador existente al producto
+        PUT/PATCH: cambia 'es_obligatorio'
+        DELETE: elimina la asociación producto–modificador
+      summary: Lista, crea, actualiza o elimina modificadores de un producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_productos_modificadores_partial_update
+      description: |-
+        GET: lista los modificadores asociados a un producto
+        POST: asocia un modificador existente al producto
+        PUT/PATCH: cambia 'es_obligatorio'
+        DELETE: elimina la asociación producto–modificador
+      summary: Lista, crea, actualiza o elimina modificadores de un producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_productos_modificadores_destroy
+      description: |-
+        GET: lista los modificadores asociados a un producto
+        POST: asocia un modificador existente al producto
+        PUT/PATCH: cambia 'es_obligatorio'
+        DELETE: elimina la asociación producto–modificador
+      summary: Lista, crea, actualiza o elimina modificadores de un producto
+      parameters:
+      - in: path
+        name: producto_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Productos
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/reglas-negocio/:
+    get:
+      operationId: v1_reglas_negocio_retrieve
+      description: |-
+        GET: lista reglas
+          - producto_id
+          - tipo_regla
+          - modificador_id (en condición o acción)
+        POST: crear regla
+      summary: Lista y crea reglas de negocio
+      tags:
+      - Reglas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_reglas_negocio_create
+      description: |-
+        GET: lista reglas
+          - producto_id
+          - tipo_regla
+          - modificador_id (en condición o acción)
+        POST: crear regla
+      summary: Lista y crea reglas de negocio
+      tags:
+      - Reglas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reglas-negocio/{regla_id}/:
+    get:
+      operationId: v1_reglas_negocio_retrieve_2
+      summary: Detalle, actualiza o elimina regla de negocio
+      parameters:
+      - in: path
+        name: regla_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Reglas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_reglas_negocio_update
+      summary: Detalle, actualiza o elimina regla de negocio
+      parameters:
+      - in: path
+        name: regla_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Reglas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_reglas_negocio_partial_update
+      summary: Detalle, actualiza o elimina regla de negocio
+      parameters:
+      - in: path
+        name: regla_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Reglas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_reglas_negocio_destroy
+      summary: Detalle, actualiza o elimina regla de negocio
+      parameters:
+      - in: path
+        name: regla_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Reglas
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/roles/:
+    get:
+      operationId: v1_roles_retrieve
+      description: |-
+        GET: lista con filtros/paginación
+          - q (busca en nombre/descripcion)
+          - empresa_id
+          - ordering (nombre, -fecha_creacion, etc.)
+          - page, page_size
+        POST: crea rol
+          Requeridos: nombre, empresa_id (según tu modelo)
+          Opcionales: descripcion
+      summary: Lista y crea roles
+      tags:
+      - Roles
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_roles_create
+      description: |-
+        GET: lista con filtros/paginación
+          - q (busca en nombre/descripcion)
+          - empresa_id
+          - ordering (nombre, -fecha_creacion, etc.)
+          - page, page_size
+        POST: crea rol
+          Requeridos: nombre, empresa_id (según tu modelo)
+          Opcionales: descripcion
+      summary: Lista y crea roles
+      tags:
+      - Roles
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/roles/{rol_id}/:
+    get:
+      operationId: v1_roles_retrieve_2
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar
+        DELETE: hard delete (no hay 'estado' en el modelo)
+      summary: Detalle, actualiza o elimina rol
+      parameters:
+      - in: path
+        name: rol_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Roles
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_roles_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar
+        DELETE: hard delete (no hay 'estado' en el modelo)
+      summary: Detalle, actualiza o elimina rol
+      parameters:
+      - in: path
+        name: rol_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Roles
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_roles_partial_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar
+        DELETE: hard delete (no hay 'estado' en el modelo)
+      summary: Detalle, actualiza o elimina rol
+      parameters:
+      - in: path
+        name: rol_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Roles
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_roles_destroy
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar
+        DELETE: hard delete (no hay 'estado' en el modelo)
+      summary: Detalle, actualiza o elimina rol
+      parameters:
+      - in: path
+        name: rol_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Roles
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/sucursales/:
+    get:
+      operationId: v1_sucursales_retrieve
+      description: |-
+        **GET**: Lista sucursales con filtros y paginación.
+
+        Parámetros de consulta (query params):
+        - `q`: busca por nombre / dirección / teléfono
+        - `empresa_id`: filtra por empresa
+        - `estado`: `true` / `false`
+        - `ordering`: campo de orden (ej: `nombre`, `-fecha_creacion`)
+        - `page`, `page_size` (máx 100)
+
+        **POST**: Crea una nueva sucursal asociada opcionalmente a una empresa.
+      summary: Lista y crea sucursales
+      tags:
+      - Sucursales
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Listado paginado de sucursales
+                content:
+                  application/json:
+                    example:
+                      ok: true
+                      count: 1
+                      page: 1
+                      page_size: 20
+                      results:
+                      - sucursal_id: 1
+                        empresa_id: 1
+                        empresa_nombre: FoodTruck El Trapiche
+                        nombre: Sucursal Centro
+                        direccion: Av. Principal 123
+                        telefono: '221234567'
+                        estado: true
+                        fecha_creacion: '2025-11-15T12:00:00'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                description: Sucursal creada correctamente
+                content:
+                  application/json:
+                    example:
+                      ok: true
+                      sucursal:
+                        sucursal_id: 2
+                        empresa_id: 1
+                        empresa_nombre: FoodTruck El Trapiche
+                        nombre: Sucursal Providencia
+                        direccion: Av. Siempre Viva 742
+                        telefono: '229876543'
+                        estado: true
+                        fecha_creacion: '2025-11-16T10:00:00'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Error de validación o JSON inválido
+                content:
+                  application/json:
+                    example:
+                      detail: '''nombre'' es requerido.'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Empresa no existe (si se envía empresa_id inválido)
+                content:
+                  application/json:
+                    example:
+                      detail: Empresa no existe.
+          description: ''
+    post:
+      operationId: v1_sucursales_create
+      description: |-
+        **GET**: Lista sucursales con filtros y paginación.
+
+        Parámetros de consulta (query params):
+        - `q`: busca por nombre / dirección / teléfono
+        - `empresa_id`: filtra por empresa
+        - `estado`: `true` / `false`
+        - `ordering`: campo de orden (ej: `nombre`, `-fecha_creacion`)
+        - `page`, `page_size` (máx 100)
+
+        **POST**: Crea una nueva sucursal asociada opcionalmente a una empresa.
+      summary: Lista y crea sucursales
+      tags:
+      - Sucursales
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                empresa_id:
+                  type:
+                  - integer
+                  - 'null'
+                  description: ID de la empresa asociada (opcional según tu modelo)
+                nombre:
+                  type: string
+                direccion:
+                  type:
+                  - string
+                  - 'null'
+                telefono:
+                  type:
+                  - string
+                  - 'null'
+                estado:
+                  type: boolean
+                  default: true
+              required:
+              - nombre
+              example:
+                empresa_id: 1
+                nombre: Sucursal Providencia
+                direccion: Av. Siempre Viva 742
+                telefono: '229876543'
+                estado: true
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Listado paginado de sucursales
+                content:
+                  application/json:
+                    example:
+                      ok: true
+                      count: 1
+                      page: 1
+                      page_size: 20
+                      results:
+                      - sucursal_id: 1
+                        empresa_id: 1
+                        empresa_nombre: FoodTruck El Trapiche
+                        nombre: Sucursal Centro
+                        direccion: Av. Principal 123
+                        telefono: '221234567'
+                        estado: true
+                        fecha_creacion: '2025-11-15T12:00:00'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                description: Sucursal creada correctamente
+                content:
+                  application/json:
+                    example:
+                      ok: true
+                      sucursal:
+                        sucursal_id: 2
+                        empresa_id: 1
+                        empresa_nombre: FoodTruck El Trapiche
+                        nombre: Sucursal Providencia
+                        direccion: Av. Siempre Viva 742
+                        telefono: '229876543'
+                        estado: true
+                        fecha_creacion: '2025-11-16T10:00:00'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Error de validación o JSON inválido
+                content:
+                  application/json:
+                    example:
+                      detail: '''nombre'' es requerido.'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Empresa no existe (si se envía empresa_id inválido)
+                content:
+                  application/json:
+                    example:
+                      detail: Empresa no existe.
+          description: ''
+  /api/v1/sucursales/{sucursal_id}/:
+    get:
+      operationId: v1_sucursales_retrieve_2
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar campos (incluye empresa_id opcional)
+        DELETE: soft delete (estado=False) por defecto; hard delete con ?hard=1
+      summary: Detalle, actualiza o elimina sucursal
+      parameters:
+      - in: path
+        name: sucursal_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Sucursales
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_sucursales_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar campos (incluye empresa_id opcional)
+        DELETE: soft delete (estado=False) por defecto; hard delete con ?hard=1
+      summary: Detalle, actualiza o elimina sucursal
+      parameters:
+      - in: path
+        name: sucursal_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Sucursales
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_sucursales_partial_update
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar campos (incluye empresa_id opcional)
+        DELETE: soft delete (estado=False) por defecto; hard delete con ?hard=1
+      summary: Detalle, actualiza o elimina sucursal
+      parameters:
+      - in: path
+        name: sucursal_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Sucursales
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_sucursales_destroy
+      description: |-
+        GET: detalle
+        PUT/PATCH: actualizar campos (incluye empresa_id opcional)
+        DELETE: soft delete (estado=False) por defecto; hard delete con ?hard=1
+      summary: Detalle, actualiza o elimina sucursal
+      parameters:
+      - in: path
+        name: sucursal_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Sucursales
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/usuarios/:
+    get:
+      operationId: v1_usuarios_retrieve
+      summary: Lista y crea usuarios
+      tags:
+      - Usuarios
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_usuarios_create
+      summary: Lista y crea usuarios
+      tags:
+      - Usuarios
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/usuarios-sucursales/:
+    get:
+      operationId: v1_usuarios_sucursales_retrieve
+      description: |-
+        GET: listar asignaciones
+        POST: crear asignación (una o múltiples sucursales)
+          - Formato 1:
+                {"usuario_id": 10, "sucursal_id": 3}
+          - Formato 2:
+                {"usuario_id": 10, "sucursales": [1,2,3]}
+      summary: Lista y crea asignaciones usuario–sucursal
+      tags:
+      - Usuarios
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_usuarios_sucursales_create
+      description: |-
+        GET: listar asignaciones
+        POST: crear asignación (una o múltiples sucursales)
+          - Formato 1:
+                {"usuario_id": 10, "sucursal_id": 3}
+          - Formato 2:
+                {"usuario_id": 10, "sucursales": [1,2,3]}
+      summary: Lista y crea asignaciones usuario–sucursal
+      tags:
+      - Usuarios
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/usuarios-sucursales/{usuario_sucursal_id}/:
+    get:
+      operationId: v1_usuarios_sucursales_retrieve_2
+      summary: Detalle, actualiza o elimina asignación usuario–sucursal
+      parameters:
+      - in: path
+        name: usuario_sucursal_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Usuarios
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_usuarios_sucursales_update
+      summary: Detalle, actualiza o elimina asignación usuario–sucursal
+      parameters:
+      - in: path
+        name: usuario_sucursal_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Usuarios
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_usuarios_sucursales_partial_update
+      summary: Detalle, actualiza o elimina asignación usuario–sucursal
+      parameters:
+      - in: path
+        name: usuario_sucursal_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Usuarios
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_usuarios_sucursales_destroy
+      summary: Detalle, actualiza o elimina asignación usuario–sucursal
+      parameters:
+      - in: path
+        name: usuario_sucursal_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Usuarios
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/usuarios/{usuario_id}/:
+    get:
+      operationId: v1_usuarios_retrieve_2
+      summary: Detalle, actualiza o elimina usuario
+      parameters:
+      - in: path
+        name: usuario_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Usuarios
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_usuarios_update
+      summary: Detalle, actualiza o elimina usuario
+      parameters:
+      - in: path
+        name: usuario_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Usuarios
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_usuarios_partial_update
+      summary: Detalle, actualiza o elimina usuario
+      parameters:
+      - in: path
+        name: usuario_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Usuarios
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_usuarios_destroy
+      summary: Detalle, actualiza o elimina usuario
+      parameters:
+      - in: path
+        name: usuario_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Usuarios
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/webpay/commit/:
+    post:
+      operationId: v1_webpay_commit_create
+      summary: Commit de Webpay
+      tags:
+      - Webpay
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/webpay/init/:
+    post:
+      operationId: v1_webpay_init_create
+      summary: Iniciar transacción Webpay
+      tags:
+      - Webpay
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/webpay/transacciones/:
+    get:
+      operationId: v1_webpay_transacciones_retrieve
+      description: |-
+        GET: lista todas las transacciones Webpay
+          Filtros opcionales:
+            - pedido_id
+            - estado (pendiente / autorizado / rechazado)
+            - token (búsqueda exacta)
+      summary: Lista transacciones Webpay
+      tags:
+      - Webpay
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/webpay/transacciones/{transaccion_id}/:
+    get:
+      operationId: v1_webpay_transacciones_retrieve_2
+      summary: Detalle de transacción Webpay
+      parameters:
+      - in: path
+        name: transaccion_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Webpay
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    basicAuth:
+      type: http
+      scheme: basic

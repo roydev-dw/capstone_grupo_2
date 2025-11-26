@@ -11,6 +11,26 @@ def _service_client():
         credential=settings.AZURE_DEFAULT_CREDENTIAL
     )
 
+def make_boleta_blob_name(boleta_id: int, filename: str) -> str:
+    ext = safe_ext(filename) or ".pdf"
+    return f"boletas/{boleta_id}/{uuid.uuid4().hex}{ext}"
+
+def upload_boleta_pdf(boleta_id, file_bytes, filename):
+    """
+    Sube un PDF de boleta a Azure Blob y devuelve la URL pública.
+    """
+    # Usamos el helper para generar un nombre "bonito" y único
+    blob_name = make_boleta_blob_name(boleta_id, filename)
+
+    container = _container_client()
+    blob_client = container.get_blob_client(blob_name)
+
+    # file_bytes es un bytes-like (BytesIO.getvalue())
+    blob_client.upload_blob(file_bytes, overwrite=True)
+
+    # Devolvemos URL construida igual que en upload_file
+    return f"{settings.AZURE_BLOB_ACCOUNT_URL}/{settings.AZURE_BLOB_CONTAINER}/{blob_name}"
+
 def _container_client():
     """Obtiene el contenedor configurado."""
     svc = _service_client()

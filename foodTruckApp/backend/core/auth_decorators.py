@@ -22,8 +22,12 @@ def require_jwt(view_func):
 
             if not user.estado:
                 return JsonResponse({"detail": "Usuario inactivo."}, status=403)
-            request.usuario = user
-            request.jwt_payload = payload  
+
+            # 👉 Estándar DRF
+            request.user = user
+
+            # 👉 Payload JWT disponible para cualquier view
+            request.jwt_payload = payload
 
         except Usuario.DoesNotExist:
             return JsonResponse({"detail": "Usuario no existe."}, status=401)

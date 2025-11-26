@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.urls import path
 from core import views
 from django.views.generic import RedirectView
-from core.views import producto_detail, productos_list , sucursales_list, sucursal_detail, empresas_list, empresa_detail, categorias_list, categoria_detail, roles_list, rol_detail, usuarios_list, usuario_detail, producto_imagen, modificadores_list, modificador_detail, producto_modificadores, regla_detail, reglas_list, metodos_pago_list, metodo_pago_detail, pedido_detail, pedidos_list, pedido_detalle_detail, pedido_detalles_list, detalle_modificador_detail, detalle_modificadores_list, pago_detail, pagos_list, boleta_detail, boletas_list, usuario_sucursal_detail, usuarios_sucursales_list, webpay_init, webpay_transaccion_detail, webpay_transacciones_list, webpay_commit, auditoria_detail, auditorias_list, cierre_caja_detail, cierres_caja_list
+from core.views import producto_detail, productos_list , sucursales_list, sucursal_detail, empresas_list, empresa_detail, categorias_list, categoria_detail, roles_list, rol_detail, usuarios_list, usuario_detail, producto_imagen, modificadores_list, modificador_detail, producto_modificadores, regla_detail, reglas_list, metodos_pago_list, metodo_pago_detail, pedido_detail, pedidos_list, pedido_detalle_detail, pedido_detalles_list, detalle_modificador_detail, detalle_modificadores_list, pago_detail, pagos_list, boleta_detail, boletas_list, usuario_sucursal_detail, usuarios_sucursales_list, webpay_init, webpay_transaccion_detail, webpay_transacciones_list, webpay_commit, auditoria_detail, auditorias_list, cierre_caja_detail, cierres_caja_list, emitir_boleta, metricas_dashboard, boleta_pdf, boleta_generar_pdf
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
@@ -45,6 +45,8 @@ urlpatterns = [
     path('api/v1/pagos/<int:pago_id>/', pago_detail, name='pago_detail'),
     path('api/v1/boletas/', boletas_list, name='boletas_list'),
     path('api/v1/boletas/<int:boleta_id>/', boleta_detail, name='boleta_detail'),
+    path("api/v1/boletas/emitir/<int:pedido_id>/", emitir_boleta),
+    path("api/v1/boletas/<int:boleta_id>/generar-pdf/", boleta_generar_pdf),
     path("api/v1/usuarios-sucursales/", usuarios_sucursales_list, name="usuarios_sucursales_list"),
     path("api/v1/usuarios-sucursales/<int:usuario_sucursal_id>/", usuario_sucursal_detail, name="usuario_sucursal_detail"),
     path("api/v1/webpay/init/", views.webpay_init, name="webpay-init"),
@@ -55,6 +57,7 @@ urlpatterns = [
     path("api/v1/auditorias/<int:auditoria_id>/", auditoria_detail),
     path("api/v1/cierres-caja/", cierres_caja_list),
     path("api/v1/cierres-caja/<int:cierre_id>/", cierre_caja_detail),
+    path("api/v1/metricas/", views.metricas_dashboard),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/',
         SpectacularSwaggerView.as_view(url_name='schema'),
@@ -65,4 +68,5 @@ urlpatterns = [
         SpectacularRedocView.as_view(url_name='schema'),
         name='redoc',
     ),
+    path("api/v1/boletas/<int:boleta_id>/pdf/", boleta_pdf),    
 ]

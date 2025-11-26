@@ -69,12 +69,11 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'core.authentication.CustomJWTAuthentication', 
-        'rest_framework.authentication.BasicAuthentication', 
+        'core.authentication.CustomJWTAuthentication',
     ),
 }
 
@@ -84,50 +83,32 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'API para gestión de empresa, sucursales, productos, pedidos, pagos y auditoría de la FoodTruckApp.',
     'VERSION': '1.0.0',
 
-    'SERVE_INCLUDE_SCHEMA': False,
+    'SERVE_INCLUDE_SCHEMA': True,
 
+    # Seguridad global JWT
     'SECURITY': [
         {'BearerAuth': []}
     ],
 
-    'COMPONENTS': {
+    # ESTO ES CLAVE
+    'APPEND_COMPONENTS': {
         'securitySchemes': {
             'BearerAuth': {
                 'type': 'http',
                 'scheme': 'bearer',
                 'bearerFormat': 'JWT',
-            },
-            'basicAuth': {
-                'type': 'http',
-                'scheme': 'basic'
-            },
+            }
         }
     },
 
+    # Opcional
     'SERVE_AUTHENTICATION': [
         'rest_framework.authentication.BasicAuthentication',
     ],
 
     'SWAGGER_UI_SETTINGS': {
         "persistAuthorization": True,
-        "requestInterceptor": "function(req) { return req; }",
-        "responseInterceptor": """
-            function(res) {
-                try {
-                    if (res && res.url && res.url.includes('/api/v1/auth/login/') && res.status === 200) {
-                        const data = JSON.parse(res.data);
-                        if (data.access) {
-                            window.ui.preauthorizeApiKey('BearerAuth', data.access);
-                            console.log('✔ JWT asignado automáticamente en Swagger (BearerAuth).');
-                        }
-                    }
-                } catch (e) {
-                    console.error('⚠️ Error procesando token JWT:', e);
-                }
-                return res;
-            }
-        """,
-    },
+    }
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
@@ -234,9 +215,10 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'es-cl'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Santiago'
+
 
 USE_I18N = True
 
