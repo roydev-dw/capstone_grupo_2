@@ -5,7 +5,7 @@ import { webpayRepo } from '../utils/repoWebpay';
 import { pedidosRepo } from '../utils/repoPedidos';
 import { boletasRepo } from '../utils/repoBoletas';
 
-export function WebpayResultado() {
+export default function WebpayResultado() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
