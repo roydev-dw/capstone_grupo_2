@@ -14,7 +14,7 @@ import AccesoProhibido from './pages/AccesoProhibido';
 import { initSyncManager, resetSyncManager } from './utils/syncManager';
 import { getAccessToken } from './utils/session';
 import { EMPRESA_PUNTO_SABOR_ID } from './utils/empresas';
-import { WebpayResultado } from './pages/WebpayResultado';
+import WebpayResultado from './pages/WebpayResultado';
 import { VentasPendientes } from './pages/VentasPendientes';
 
 import '@fontsource/luckiest-guy';
