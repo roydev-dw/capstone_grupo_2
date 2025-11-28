@@ -13,6 +13,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 import { categoriasRepo } from '../utils/repoCategorias';
 import { productoModificadoresRepo } from '../utils/repoProductoModificador';
 import { EMPRESA_PUNTO_SABOR_ID, perteneceAEmpresa } from '../utils/empresas';
+import { EstadoEnLinea } from '../components/ui/EstadoEnLinea';
 
 // --- helpers de normalización de respuestas ---
 
@@ -589,13 +590,6 @@ export const Vendedor = () => {
         <div className='flex flex-col min-h-screen flex-1 overflow-y-auto'>
           <Header />
 
-          {fetchError && (
-            <div className='mx-6 mt-24 lg:mt-6 bg-red-100 text-red-700 border border-red-300 rounded-lg px-4 py-3'>
-              <p className='font-semibold'>No se pudieron cargar productos</p>
-              <p className='text-sm'>{fetchError}</p>
-            </div>
-          )}
-
           <main className='flex-1 px-6 pb-6 pt-40 lg:p-12'>
             <FiltroCategoria categories={categoriasDisponibles} value={categoriaActiva} onChange={setCategoriaActiva} />
 
@@ -641,6 +635,17 @@ export const Vendedor = () => {
             onPedidoConfirmado={handlePedidoConfirmado}
           />
         </div>
+      </div>
+
+      <div className='fixed bottom-4 left-4 z-40 flex flex-wrap items-center gap-3'>
+        <EstadoEnLinea compact />
+
+        <button
+          type='button'
+          onClick={() => navigate('/vendedor/pendientes')}
+          className='px-4 py-3 rounded-lg bg-white shadow-lg border border-gray-200 text-sm font-semibold text-primario hover:brightness-105 transition'>
+          Ventas pendientes
+        </button>
       </div>
 
       {isMobileAbrirCarrito && (

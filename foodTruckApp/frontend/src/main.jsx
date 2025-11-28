@@ -1,5 +1,5 @@
 // main.jsx
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
@@ -14,7 +14,8 @@ import AccesoProhibido from './pages/AccesoProhibido';
 import { initSyncManager, resetSyncManager } from './utils/syncManager';
 import { getAccessToken } from './utils/session';
 import { EMPRESA_PUNTO_SABOR_ID } from './utils/empresas';
-import { WebpayResultado } from './pages/webpayResultado';
+import { WebpayResultado } from './pages/WebpayResultado';
+import { VentasPendientes } from './pages/VentasPendientes';
 
 import '@fontsource/luckiest-guy';
 import '@fontsource/poppins/400.css';
@@ -85,6 +86,17 @@ const AppRouter = () => {
               allowCompanies={[EMPRESA_PUNTO_SABOR_ID]}
               forbiddenTo='/403'>
               <Vendedor />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path='/vendedor/pendientes'
+          element={
+            <RutaProtegida
+              allow={['vendedor', 'supervisor', 'administrador']}
+              allowCompanies={[EMPRESA_PUNTO_SABOR_ID]}
+              forbiddenTo='/403'>
+              <VentasPendientes />
             </RutaProtegida>
           }
         />

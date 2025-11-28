@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { pedidosRepo } from '../../utils/repoPedidos';
 import { webpayRepo } from '../../utils/repoWebpay';
+import { boletasRepo } from '../../utils/repoBoletas';
 import { HiXMark } from 'react-icons/hi2';
 import { FaEdit } from 'react-icons/fa';
 import { IoTrash } from 'react-icons/io5';
@@ -21,20 +22,111 @@ export const PedidoActual = React.memo(function PedidoActual({
   usuarioId,
   onPedidoConfirmado = () => {},
 }) {
-  const [creandoPedido, setCreandoPedido] = useState(false);
+  const [procesando, setProcesando] = useState(false);
+  const [modoPago, setModoPago] = useState('');
+
+  const generarBoletaLocal = ({ numeroPedido, subtotal, impuesto, total, cartItems }) => {
+    try {
+      const fecha = new Date().toLocaleString();
+      const filas = (cartItems || [])
+        .map((item) => {
+          const extras = item.selectedOptions
+            ? Object.values(item.selectedOptions).map(
+                (opt) =>
+                  `<div style="color:#555;font-size:12px;">- ${opt.name || ''}${
+                    typeof opt.extraPrice === 'number'
+                      ? ` (+$${Math.round(opt.extraPrice).toLocaleString('es-CL')})`
+                      : ''
+                  }</div>`
+              )
+            : [];
+          return `<tr>
+              <td style="padding:4px 8px;">
+                <div>${item.name || item.id}</div>
+                ${extras.join('')}
+              </td>
+              <td style="padding:4px 8px; text-align:center;">${item.quantity}</td>
+              <td style="padding:4px 8px; text-align:right;">$${Math.round(
+                item.precioFinalUnitario || item.price || 0
+              ).toLocaleString('es-CL')}</td>
+            </tr>`;
+        })
+        .join('');
+
+      const html = `
+        <html>
+          <head>
+            <title>Boleta ${numeroPedido || ''}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 12px; }
+              h1 { font-size: 18px; margin: 0 0 8px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+              th { text-align: left; padding: 6px 8px; border-bottom: 1px solid #ddd; }
+              td { border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+              .totales { margin-top: 12px; }
+              .totales div { display: flex; justify-content: space-between; margin: 4px 0; }
+            </style>
+          </head>
+          <body>
+            <h1>Boleta (offline)</h1>
+            <p style="margin:4px 0;">N°: ${numeroPedido || 'Pendiente'}</p>
+            <p style="margin:4px 0;">Fecha: ${fecha}</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Cant.</th>
+                  <th style="text-align:right;">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filas}
+              </tbody>
+            </table>
+            <div class="totales">
+              <div><span>Subtotal</span><strong>$${Math.round(subtotal).toLocaleString('es-CL')}</strong></div>
+              <div><span>IVA (19%)</span><strong>$${Math.round(impuesto).toLocaleString('es-CL')}</strong></div>
+              <div><span>Total</span><strong>$${Math.round(total).toLocaleString('es-CL')}</strong></div>
+            </div>
+            <p style="margin-top:12px;font-size:12px;color:#555;">Boleta generada sin conexion. Se sincronizara cuando vuelva internet.</p>
+            <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 200); };</script>
+          </body>
+        </html>
+      `;
+
+      const win = window.open('', '_blank', 'width=600,height=800');
+      if (win) {
+        win.document.write(html);
+        win.document.close();
+      } else {
+        console.warn('[PEDIDO] No se pudo abrir ventana para imprimir boleta offline');
+      }
+    } catch (err) {
+      console.error('[PEDIDO] Error generando boleta offline', err);
+    }
+  };
 
   // 👇 log garantizado en cada render
   console.log('%c[PEDIDO] Render PedidoActual', 'color:#ff0;font-weight:bold', {
     cartLength: cart.length,
     sucursalId,
     usuarioId,
-    creandoPedido,
+    procesando,
+    modoPago,
   });
 
   const { subtotal, impuesto, totalPagar } = useMemo(() => {
     const sb = cart.reduce((sum, item) => sum + item.precioFinalUnitario * item.quantity, 0);
+
     const IVA = 0.19;
-    return { subtotal: sb, impuesto: sb * IVA, totalPagar: sb * (1 + IVA) };
+    const impuestoCalc = Math.round(sb * IVA);
+    const totalCalc = sb + impuestoCalc;
+
+    return {
+      subtotal: sb, // neto
+      impuesto: impuestoCalc,
+      totalPagar: totalCalc,
+    };
   }, [cart]);
 
   const formatCurrency = (value) =>
@@ -49,16 +141,16 @@ export const PedidoActual = React.memo(function PedidoActual({
   const handlePagar = async () => {
     console.log('%c[PEDIDO] handlePagar CLICK', 'color:#0ff;font-weight:bold', {
       confirmarEnabled,
-      creandoPedido,
+      procesando,
       sucursalId,
       usuarioId,
     });
 
     try {
-      if (!confirmarEnabled || creandoPedido) {
+      if (!confirmarEnabled || procesando) {
         console.log('%c[PEDIDO] handlePagar abortado por disabled/creando', 'color:#f90', {
           confirmarEnabled,
-          creandoPedido,
+          procesando,
         });
         return;
       }
@@ -74,7 +166,8 @@ export const PedidoActual = React.memo(function PedidoActual({
         return;
       }
 
-      setCreandoPedido(true);
+      setProcesando(true);
+      setModoPago('webpay');
 
       // --- PASO 1: CABECERA ---
       const payloadCabecera = {
@@ -89,11 +182,11 @@ export const PedidoActual = React.memo(function PedidoActual({
         numeroPedido: undefined,
       };
 
-      console.log('%c[PEDIDO] Payload cabecera →', 'color:#0af;font-weight:bold', payloadCabecera);
+      console.log('%c[PEDIDO] Payload cabecera', 'color:#0af;font-weight:bold', payloadCabecera);
 
       const pedidoCreado = await pedidosRepo.createCabecera(payloadCabecera);
 
-      console.log('%c[PEDIDO] Respuesta backend cabecera →', 'color:#0f0;font-weight:bold', pedidoCreado);
+      console.log('%c[PEDIDO] Respuesta backend cabecera', 'color:#0f0;font-weight:bold', pedidoCreado);
 
       const pedidoId = pedidoCreado?.pedido_id ?? pedidoCreado?.id;
       if (!pedidoId) {
@@ -111,13 +204,13 @@ export const PedidoActual = React.memo(function PedidoActual({
 
       const detallesResultado = await pedidosRepo.createDetallesWithModificadores(pedidoId, cart);
 
-      console.log('%c[PEDIDO] Detalles+mods creados en backend →', 'color:#f0f;font-weight:bold', detallesResultado);
+      console.log('%c[PEDIDO] Detalles+mods creados en backend', 'color:#f0f;font-weight:bold', detallesResultado);
 
       // --- PASO 3: INICIAR WEBPAY ---
       // Ruta del frontend a la que Webpay va a volver
       const returnUrl = `${window.location.origin}/resultado`; // debe coincidir con <Route path="/resultado" ...>
 
-      console.log('%c[WEBPAY] init → params', 'color:#0af;font-weight:bold', {
+      console.log('%c[WEBPAY] init params', 'color:#0af;font-weight:bold', {
         pedidoId,
         monto: totalPagar,
         returnUrl,
@@ -129,7 +222,7 @@ export const PedidoActual = React.memo(function PedidoActual({
         returnUrl,
       });
 
-      console.log('%c[WEBPAY] init ← respuesta', 'color:#0f0;font-weight:bold', webpayInit);
+      console.log('%c[WEBPAY] init respuesta', 'color:#0f0;font-weight:bold', webpayInit);
 
       if (!webpayInit?.ok || !webpayInit?.token || !webpayInit?.url) {
         console.error('[WEBPAY] init devolvió algo inesperado', webpayInit);
@@ -146,7 +239,7 @@ export const PedidoActual = React.memo(function PedidoActual({
           createdAt: new Date().toISOString(),
         };
         localStorage.setItem('lastWebpayTx', JSON.stringify(info));
-        console.log('%c[WEBPAY] lastWebpayTx guardado →', 'color:#ff0;font-weight:bold', info);
+        console.log('%c[WEBPAY] lastWebpayTx guardado', 'color:#ff0;font-weight:bold', info);
       } catch (e) {
         console.warn('[WEBPAY] No se pudo guardar lastWebpayTx en localStorage', e);
       }
@@ -172,7 +265,111 @@ export const PedidoActual = React.memo(function PedidoActual({
         err?.data?.detail || err?.data?.message || err?.message || 'No se pudo crear el pedido ni iniciar Webpay';
       toast.error(msg);
     } finally {
-      setCreandoPedido(false);
+      setProcesando(false);
+      setModoPago('');
+    }
+  };
+
+  const handlePagarEfectivo = async () => {
+    console.log('%c[PEDIDO] handlePagarEfectivo CLICK', 'color:#0ff;font-weight:bold', {
+      confirmarEnabled,
+      procesando,
+      sucursalId,
+      usuarioId,
+    });
+
+    try {
+      if (!confirmarEnabled || procesando) {
+        console.log('%c[PEDIDO] handlePagarEfectivo abortado por disabled/procesando', 'color:#f90', {
+          confirmarEnabled,
+          procesando,
+        });
+        return;
+      }
+
+      if (!sucursalId) {
+        console.warn('[PEDIDO] No hay sucursalId, abortando creaci��n de pedido en efectivo');
+        toast.error('No hay sucursal seleccionada para crear el pedido.');
+        return;
+      }
+      if (!usuarioId) {
+        console.warn('[PEDIDO] No hay usuarioId, abortando creaci��n de pedido en efectivo');
+        toast.error('No hay usuario asignado para crear el pedido.');
+        return;
+      }
+
+      setProcesando(true);
+      setModoPago('cash');
+
+      const resultado = await pedidosRepo.registrarPagoEfectivo({
+        sucursalId,
+        usuarioId,
+        subtotal,
+        iva: impuesto,
+        total: totalPagar,
+        cartItems: cart,
+        descuentoTotal: 0,
+        numeroPedido: undefined,
+        tipoVenta: 'Local',
+      });
+
+      if (resultado?.status === 'online') {
+        toast.success('Pago en efectivo registrado.');
+        onPedidoConfirmado({
+          pedido: resultado?.pedido,
+          detalles: resultado?.detalles,
+          pedidoId: resultado?.pedidoId,
+          metodo: 'efectivo',
+          offline: false,
+        });
+
+        // Emitir y abrir boleta en PDF
+        if (resultado?.pedidoId) {
+          try {
+            const { boletaId, pdfResp } = await boletasRepo.emitirYGenerarPdf({
+              pedidoId: resultado.pedidoId,
+            });
+            const url = pdfResp?.urlPdf;
+            if (url) {
+              window.open(url, '_blank');
+            } else {
+              toast.error('No se recibió la URL de la boleta para imprimir.');
+            }
+            console.log('[PEDIDO] Boleta emitida', { boletaId, url });
+          } catch (boletaErr) {
+            console.error('[PEDIDO] No se pudo emitir/abrir boleta en efectivo', boletaErr);
+            toast.error('El pedido se guardó, pero la boleta no se pudo generar.');
+          }
+        }
+      } else {
+        toast.success('Venta guardada para sincronizar cuando vuelva internet.');
+        onPedidoConfirmado({
+          entry: resultado?.entry,
+          metodo: 'efectivo',
+          offline: true,
+        });
+        const numeroLocal =
+          resultado?.entry?.payload?.cabecera?.numeroPedido ||
+          resultado?.entry?.payload?.cabecera?.numero_pedido ||
+          `PED-${Date.now()}`;
+        generarBoletaLocal({
+          numeroPedido: numeroLocal,
+          subtotal,
+          impuesto,
+          total: totalPagar,
+          cartItems: cart,
+        });
+      }
+
+      onClearCart();
+    } catch (err) {
+      console.error('%c[PEDIDO] Error en pago en efectivo', 'color:#f00;font-weight:bold', err);
+      const msg =
+        err?.data?.detail || err?.data?.message || err?.message || 'No se pudo registrar el pago en efectivo.';
+      toast.error(msg);
+    } finally {
+      setProcesando(false);
+      setModoPago('');
     }
   };
 
@@ -320,21 +517,29 @@ export const PedidoActual = React.memo(function PedidoActual({
           </div>
         </div>
 
-        <div className='flex gap-4'>
+        <div className='flex flex-col sm:flex-row gap-3'>
           <button
             type='button'
             onClick={onClearCart}
             className='flex-1 py-3 rounded-md font-semibold bg-secundario hover:bg-secundario/80 border border-border text-fondo transition duration-300 disabled:opacity-60 disabled:cursor-not-allowed'
-            disabled={!confirmarEnabled || creandoPedido}>
+            disabled={!confirmarEnabled || procesando}>
             Cancelar
+          </button>
+
+          <button
+            type='button'
+            onClick={handlePagarEfectivo}
+            className='flex-1 py-3 rounded-md font-semibold transition-all bg-emerald-600 text-white shadow-md hover:brightness-105 disabled:opacity-60 disabled:cursor-not-allowed'
+            disabled={!confirmarEnabled || procesando}>
+            {procesando && modoPago === 'cash' ? 'Procesando...' : 'Pago en efectivo'}
           </button>
 
           <button
             type='button'
             onClick={handlePagar}
             className='flex-1 py-3 rounded-md font-semibold transition-all bg-primario text-white shadow-md hover:brightness-105 disabled:opacity-60 disabled:cursor-not-allowed'
-            disabled={!confirmarEnabled || creandoPedido}>
-            {creandoPedido ? 'Creando…' : 'Pagar'}
+            disabled={!confirmarEnabled || procesando}>
+            {procesando && modoPago === 'webpay' ? 'Procesando...' : 'Pago Webpay'}
           </button>
         </div>
       </div>
