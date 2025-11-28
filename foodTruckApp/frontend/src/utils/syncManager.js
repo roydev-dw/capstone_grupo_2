@@ -2,6 +2,7 @@ import { db, isOnline } from './db';
 import { clearSyncedOutbox } from './offlineQueue';
 import { processProductOutboxEntry } from './repoProductos';
 import { processCategoryOutboxEntry } from './repoCategorias';
+import { processPedidoOutboxEntry } from './repoPedidos';
 import { getAccessToken } from './session';
 
 const nowIso = () => new Date().toISOString();
@@ -9,6 +10,7 @@ const nowIso = () => new Date().toISOString();
 const TYPE_HANDLERS = {
   product: processProductOutboxEntry,
   category: processCategoryOutboxEntry,
+  pedido: processPedidoOutboxEntry,
 };
 
 let syncing = false;

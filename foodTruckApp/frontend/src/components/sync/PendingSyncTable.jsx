@@ -14,12 +14,14 @@ const STATUS_LABELS = {
 const TYPE_LABELS = {
   product: 'Producto',
   category: 'Categoria',
+  pedido: 'Pedido',
 };
 
 const OP_LABELS = {
   create: 'Crear',
   update: 'Actualizar',
   delete: 'Eliminar',
+  cash: 'Pago efectivo',
 };
 
 const STATUS_COLORS = {

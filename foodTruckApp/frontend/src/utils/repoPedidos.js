@@ -1,8 +1,12 @@
 // src/utils/repoPedidos.js
 import { apiFoodTrucks } from './api';
+import { isOnline } from './db';
+import { enqueueOutbox } from './offlineQueue';
 
 const ENDPOINT_BASE = 'v1/pedidos/';
 const DETALLES_BASE = 'v1/pedidos/detalles/';
+const OUTBOX_TYPE = 'pedido';
+const OUTBOX_OP_CASH = 'cash';
 
 async function unwrapResponse(resp) {
   if (resp && typeof resp === 'object' && typeof resp.json === 'function') {
@@ -19,6 +23,77 @@ function buildNotasFromCartItem(item) {
     .map((opt) => opt?.name)
     .filter(Boolean);
   return parts.length ? `Extras: ${parts.join(', ')}` : '';
+}
+
+function normalizeCartItems(cartItems = []) {
+  return cartItems
+    .map((item) => {
+      const selected = item?.selectedOptions
+        ? Object.entries(item.selectedOptions).reduce((acc, [key, opt]) => {
+            acc[key] = {
+              id: opt?.id ?? opt?.modificador_id ?? opt?.modificadorId ?? null,
+              name: opt?.name ?? opt?.nombre ?? key,
+              extraPrice: Number(opt?.extraPrice ?? opt?.valor_aplicado ?? opt?.valor ?? 0),
+            };
+            return acc;
+          }, {})
+        : undefined;
+
+      return {
+        id: item?.id ?? item?.producto_id ?? item?.productoId ?? item?.productId ?? null,
+        quantity: Number(item?.quantity || 1),
+        selectedOptions: selected,
+        name: item?.name ?? item?.nombre ?? '',
+        price: Number(item?.price ?? item?.precio ?? item?.precio_base ?? 0),
+        precioFinalUnitario: Number(item?.precioFinalUnitario ?? item?.price ?? 0),
+      };
+    })
+    .filter((item) => item.id != null);
+}
+
+function buildCabeceraPayload({
+  sucursalId,
+  usuarioId,
+  subtotal,
+  iva,
+  total,
+  tipoVenta = 'Local',
+  esOffline = false,
+  descuentoTotal = 0,
+  numeroPedido,
+}) {
+  return {
+    sucursalId,
+    usuarioId,
+    subtotal,
+    iva,
+    total,
+    tipoVenta,
+    esOffline,
+    descuentoTotal,
+    numeroPedido,
+  };
+}
+
+function shouldQueuePedidoError(err) {
+  if (!err) return true;
+  const status = err?.status ?? err?.response?.status;
+  if (typeof status === 'number') {
+    if (status >= 500 || status === 408 || status === 429 || status === 0) return true;
+    return false;
+  }
+  return !isOnline();
+}
+
+async function createPedidoCompleto({ cabeceraPayload, cartItems }) {
+  const pedidoCreado = await pedidosRepo.createCabecera(cabeceraPayload);
+  const pedidoId = pedidoCreado?.pedido_id ?? pedidoCreado?.id;
+  if (!pedidoId) {
+    throw new Error('No se obtuvo pedido_id para crear los detalles');
+  }
+  const detalles = await pedidosRepo.createDetallesWithModificadores(pedidoId, cartItems);
+  await pedidosRepo.updateEstado(pedidoId, 'Finalizado').catch(() => {});
+  return { pedido: pedidoCreado, pedidoId, detalles };
 }
 
 /**
@@ -52,7 +127,80 @@ export const pedidosRepo = {
       total_neto: Math.round(total),
     };
 
+    console.log('[PEDIDOS] createCabecera body enviado ->', body);
     const res = await apiFoodTrucks.post(ENDPOINT_BASE, body);
+    const data = await unwrapResponse(res);
+    return data?.pedido ?? data;
+  },
+
+  async registrarPagoEfectivo({
+    sucursalId,
+    usuarioId,
+    subtotal,
+    iva,
+    total,
+    cartItems = [],
+    descuentoTotal = 0,
+    numeroPedido,
+    tipoVenta = 'Local',
+  }) {
+    if (!sucursalId) throw new Error('sucursalId es requerido para registrar pago en efectivo');
+    if (!usuarioId) throw new Error('usuarioId es requerido para registrar pago en efectivo');
+
+    const cartNormalized = normalizeCartItems(cartItems);
+    if (!cartNormalized.length) {
+      throw new Error('No hay productos en el carrito para generar el pedido');
+    }
+
+    const numero = numeroPedido || `PED-${Date.now()}`;
+    const cabeceraBase = buildCabeceraPayload({
+      sucursalId,
+      usuarioId,
+      subtotal,
+      iva,
+      total,
+      tipoVenta,
+      descuentoTotal,
+      numeroPedido: numero,
+      esOffline: false,
+    });
+
+    if (isOnline()) {
+      try {
+        const resultado = await createPedidoCompleto({
+          cabeceraPayload: cabeceraBase,
+          cartItems: cartNormalized,
+        });
+        return { status: 'online', ...resultado };
+      } catch (err) {
+        console.warn('[PEDIDOS] Pago en efectivo online fallo, se encola para sincronizar', err);
+        if (!shouldQueuePedidoError(err)) {
+          throw err;
+        }
+      }
+    }
+
+    const entry = await enqueueOutbox({
+      type: OUTBOX_TYPE,
+      op: OUTBOX_OP_CASH,
+      payload: {
+        cabecera: { ...cabeceraBase, esOffline: true },
+        items: cartNormalized,
+      },
+    });
+
+    return { status: 'queued', entry };
+  },
+
+  async updateEstado(pedidoId, nuevoEstado = 'Finalizado') {
+    const id = Number(pedidoId);
+    if (!id || Number.isNaN(id)) {
+      throw new Error('pedidoId valido es requerido para actualizar el estado');
+    }
+
+    const body = { estado: nuevoEstado };
+
+    const res = await apiFoodTrucks.patch(`${ENDPOINT_BASE}${id}/`, body);
     const data = await unwrapResponse(res);
     return data?.pedido ?? data;
   },
@@ -132,3 +280,25 @@ export const pedidosRepo = {
     return result;
   },
 };
+
+async function processPedidoCashEntry(entry) {
+  const payload = entry?.payload ?? {};
+  const cabecera = payload?.cabecera;
+  const items = normalizeCartItems(payload?.items || payload?.cartItems || []);
+  if (!cabecera || !items.length) {
+    throw new Error('Entrada de outbox de pedido incompleta: faltan cabecera o items');
+  }
+
+  const cabeceraPayload = {
+    ...cabecera,
+    esOffline: cabecera?.esOffline ?? true,
+  };
+
+  return createPedidoCompleto({ cabeceraPayload, cartItems: items });
+}
+
+export async function processPedidoOutboxEntry(entry) {
+  if (!entry) return null;
+  if (entry.op === OUTBOX_OP_CASH) return processPedidoCashEntry(entry);
+  throw new Error(`Operacion de outbox pedidos desconocida: ${entry.op}`);
+}
